@@ -1604,7 +1604,26 @@ if('serviceWorker' in navigator && /^https?:$/.test(location.protocol)){
     document.getElementById('accessTitle').focus();
   });
 })();
+</script><script>
+/* Shared background and accent for the agenda interface. */
+{
+  const theme = document.createElement('style');
+  theme.textContent = `
+    :root { --blue:#205dc2; --blue-dark:#205dc2; --blue-tint:#edf4ff; }
+    #app .screen { background:var(--bg); }
+    #screen-acceso .access-card, #screen-portada .portada-inner {
+      background:transparent; border:0; box-shadow:none;
+    }
+    #screen-acceso .portada-btn, #screen-portada .portada-btn {
+      background:var(--blue); color:white; border:1px solid var(--blue);
+      box-shadow:0 4px 0 #205dc230;
+    }
+    #app .portada-btn .agenda-icon { background:transparent; color:inherit; }
+  `;
+  document.head.append(theme);
+}
 </script>
+
 
 </body>
 </html>
