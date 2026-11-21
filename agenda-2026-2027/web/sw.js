@@ -1,5 +1,5 @@
 const prefix = 'agenda-shell-';
-const version = prefix + 'v1';
+const version = prefix + 'v2';
 const shell = ['./', './index.html', './manifest.webmanifest', './icons/agenda-192.png', './icons/agenda-512.png', './icons/apple-touch-icon.png'];
 
 self.addEventListener('install', event => {
