@@ -1623,7 +1623,31 @@ if('serviceWorker' in navigator && /^https?:$/.test(location.protocol)){
   `;
   document.head.append(theme);
 }
+</script><script>
+{
+  const access = document.getElementById('screen-acceso');
+  const adminButton = access.querySelector('[data-profile="administrador"]');
+  const adminAccess = document.createElement('details');
+  const summary = document.createElement('summary');
+  summary.textContent = 'Iniciar sesión como administrador';
+  adminAccess.className = 'admin-access';
+  adminAccess.append(summary, adminButton);
+  access.querySelector('.access-note').replaceWith(adminAccess);
+  access.querySelector('.access-card > p').textContent = 'Entra en la Agenda 2026 · 2027.';
+  document.getElementById('endProfile').addEventListener('click', () => {
+    adminAccess.open = false;
+  });
+  const style = document.createElement('style');
+  style.textContent = `
+    .admin-access { margin-top:18px; color:var(--blue); font-size:14px; }
+    .admin-access summary { width:fit-content; padding:7px 0; cursor:pointer; font-weight:800; }
+    .admin-access summary:focus-visible { outline:3px solid var(--blue); outline-offset:3px; }
+    .admin-access .profile-option { margin-top:8px; }
+  `;
+  document.head.append(style);
+}
 </script>
+
 
 
 </body>
