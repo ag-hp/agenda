@@ -393,6 +393,20 @@
     #screen-calendario .cal-controls { gap:6px; }
     #screen-calendario .day-cell { padding-inline:2px; }
   }
+
+  .calendar-google-icon { color:#185abc; font:900 22px var(--font-body); }
+  #calendarSettings {
+    width:min(400px, calc(100% - 32px)); padding:0;
+    border:1px solid #d7e2f3; border-radius:22px; color:var(--ink); background:#fff;
+    box-shadow:0 16px 42px #172d5733;
+  }
+  #calendarSettings::backdrop { background:#172d5755; }
+  .calendar-settings-content { display:grid; gap:16px; padding:20px; }
+  .calendar-settings-content h2 { margin:0; font:800 24px/1.2 var(--font-display); }
+  .calendar-settings-option { display:flex; align-items:center; gap:10px; font-weight:700; }
+  .calendar-settings-option input { margin:0; width:20px; height:20px; accent-color:var(--blue); }
+  #calendarSettings [hidden] { display:none; }
+  .calendar-menu-button:disabled { opacity:.55; cursor:wait; }
 </style>
 </head>
 <body>
@@ -428,7 +442,26 @@
       <button class="calendar-menu-button" type="button" title="Añadir evento hoy" aria-label="Añadir evento hoy" onclick="showToday(true)">
         <span aria-hidden="true" class="calendar-menu-plus">+</span>
       </button>
+      <button class="calendar-menu-button calendar-google-icon" id="connectGoogleCalendar" type="button"
+        title="Conectar Google Calendar" aria-label="Conectar Google Calendar">
+        <span aria-hidden="true">G</span>
+      </button>
+      <button class="calendar-menu-button" id="openCalendarSettings" type="button"
+        title="Configuración del calendario" aria-label="Configuración del calendario" aria-haspopup="dialog">
+        <span aria-hidden="true">⚙️</span>
+      </button>
     </nav>
+    <dialog id="calendarSettings" aria-labelledby="calendarSettingsTitle">
+      <form method="dialog" class="calendar-settings-content">
+        <h2 id="calendarSettingsTitle">Configuración del calendario</h2>
+        <label class="calendar-settings-option">
+          <input id="showGoogleCalendarEvents" type="checkbox" checked>
+          Mostrar eventos de Google Calendar
+        </label>
+        <button type="button" class="round-btn light" id="disconnectGoogleCalendar" hidden>Desconectar Google Calendar</button>
+        <button class="round-btn" value="close" autofocus>Cerrar</button>
+      </form>
+    </dialog>
     <div class="cal-topbar">
       <div class="cal-topbar-title">Calendario</div>
     </div>
@@ -1944,10 +1977,23 @@ window.addEventListener('resize', () => {
   const controls = document.createElement('section');
   controls.className = 'google-calendar-controls';
   controls.setAttribute('aria-label', 'Google Calendar');
-  controls.innerHTML = '<div><button type="button" class="round-btn light" id="connectGoogleCalendar">Conectar Google Calendar</button><button type="button" class="round-btn light" id="disconnectGoogleCalendar" hidden>Desconectar</button></div><p role="status" id="googleCalendarStatus"></p>';
+  controls.innerHTML = '<p role="status" id="googleCalendarStatus"></p>';
   document.querySelector('#screen-calendario .cal-topbar').after(controls);
-  const connect = controls.querySelector('#connectGoogleCalendar');
-  const disconnect = controls.querySelector('#disconnectGoogleCalendar');
+  const connect = document.getElementById('connectGoogleCalendar');
+  const disconnect = document.getElementById('disconnectGoogleCalendar');
+  const settings = document.getElementById('calendarSettings');
+  const showEvents = document.getElementById('showGoogleCalendarEvents');
+  const visibilityKey = 'agenda.showGoogleCalendarEvents';
+  try { showEvents.checked = localStorage.getItem(visibilityKey) !== 'false'; } catch {}
+  document.getElementById('openCalendarSettings').onclick = () => settings.showModal();
+  showEvents.onchange = () => {
+    try { localStorage.setItem(visibilityKey, String(showEvents.checked)); } catch {}
+    redraw();
+  };
+  function updateConnectionLabel(label) {
+    connect.title = label;
+    connect.setAttribute('aria-label', label);
+  }
   const status = controls.querySelector('#googleCalendarStatus');
   const style = document.createElement('style');
   style.textContent = '.google-calendar-controls{margin:0 0 12px}.google-calendar-controls>div{display:flex;gap:8px;flex-wrap:wrap}.google-calendar-controls [hidden]{display:none}.google-calendar-controls p{margin:5px 0 0;font-size:13px;color:#485570}.google-calendar-controls p:empty{display:none}.day-tag.google-event{background:#edf4ff;color:#174cab}.day-item.google-event{border-left-color:#205dc2}.day-item.google-event .google-label{font-size:12px;color:#485570}';
@@ -1973,7 +2019,7 @@ window.addEventListener('resize', () => {
   renderCalendar = () => {
     existingCalendar();
     document.querySelectorAll('#daysGrid .day-cell:not(:disabled)').forEach((cell, index) => {
-      const events = eventsByDay.get(curYear + '-' + curMonth + '-' + (index + 1)) ?? [];
+      const events = (showEvents.checked && eventsByDay.get(curYear + '-' + curMonth + '-' + (index + 1))) || [];
       for (const event of events.slice(0, 2)) {
         const tag = textElement('span', 'day-tag google-event', event.title);
         tag.title = 'Google Calendar · ' + event.title;
@@ -1984,7 +2030,7 @@ window.addEventListener('resize', () => {
   };
   renderDayList = () => {
     existingDay();
-    const events = eventsByDay.get(window._curDayKey) ?? [];
+    const events = (showEvents.checked && eventsByDay.get(window._curDayKey)) || [];
     if (!events.length) return;
     const list = document.getElementById('dayList');
     list.querySelector('.day-empty')?.remove();
@@ -2062,7 +2108,7 @@ window.addEventListener('resize', () => {
     requestedMonth = undefined;
     eventsByDay.clear();
     connect.disabled = false;
-    connect.textContent = 'Conectar Google Calendar';
+    updateConnectionLabel('Conectar Google Calendar');
     disconnect.hidden = true;
     status.textContent = message;
     redraw();
@@ -2087,7 +2133,7 @@ window.addEventListener('resize', () => {
           return;
         }
         token = response.access_token;
-        connect.textContent = 'Actualizar Google Calendar';
+        updateConnectionLabel('Actualizar Google Calendar');
         disconnect.hidden = false;
         void loadMonth();
       }, error_callback:() => {
@@ -2107,7 +2153,10 @@ window.addEventListener('resize', () => {
   goTo = name => {
     existingNavigation(name);
     if (name === 'calendario' && document.getElementById('screen-calendario').classList.contains('active')) initialize();
-    if (name === 'acceso') clearConnection();
+    if (name === 'acceso') {
+      if (settings.open) settings.close();
+      clearConnection();
+    }
   };
   connect.onclick = () => {
     if (token) { void loadMonth(); return; }
@@ -2118,7 +2167,11 @@ window.addEventListener('resize', () => {
     try { tokenClient.requestAccessToken({prompt:'select_account'}); }
     catch { clearConnection('No se pudo abrir la conexión con Google Calendar.'); }
   };
-  disconnect.onclick = () => clearConnection('Google Calendar se ha desconectado de esta sesión.');
+  disconnect.onclick = () => {
+    clearConnection('Google Calendar se ha desconectado de esta sesión.');
+    settings.close();
+    connect.focus();
+  };
 })();
 </script>
 
