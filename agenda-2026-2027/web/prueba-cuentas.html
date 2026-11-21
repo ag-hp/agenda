@@ -361,6 +361,35 @@
     .day-cell{ padding:4px 2px; min-height:42px; }
     .day-tag{ padding-inline:2px; }
   }
+
+  #screen-calendario {
+    display:grid;
+    grid-template-columns:56px minmax(0, 1fr);
+    grid-template-rows:auto auto minmax(0, 1fr);
+    gap:12px;
+  }
+  .calendar-menu {
+    grid-column:1; grid-row:1 / -1; display:flex; flex-direction:column;
+    align-items:center; gap:8px; padding:8px 4px;
+    background:#f3f6fc; border-radius:18px;
+  }
+  .calendar-menu-button {
+    display:grid; place-items:center; width:44px; height:44px; cursor:pointer;
+    font-size:24px; line-height:1; background:#fff;
+    border:1px solid #d7e2f3; border-radius:13px;
+  }
+  .calendar-menu-button:hover { background:#e5efff; }
+  #screen-calendario .cal-topbar,
+  #screen-calendario .google-calendar-controls,
+  #screen-calendario .cal-card { grid-column:2; margin:0; }
+  #screen-calendario .cal-topbar { grid-row:1; align-self:center; }
+  #screen-calendario .google-calendar-controls { grid-row:2; }
+  #screen-calendario .cal-card { grid-row:3; }
+  @media (max-width:520px) {
+    #screen-calendario { grid-template-columns:48px minmax(0, 1fr); gap:8px; }
+    .calendar-menu { grid-row:1 / 3; align-self:start; padding:2px; }
+    #screen-calendario .cal-card { grid-column:1 / -1; }
+  }
 </style>
 </head>
 <body>
@@ -381,9 +410,14 @@
 
   <!-- CALENDARIO -->
   <div class="screen" id="screen-calendario">
+    <nav class="calendar-menu" aria-label="Menú de la agenda">
+      <button class="calendar-menu-button" type="button" title="Volver a la portada"
+        aria-label="Volver a la portada" onclick="goTo('portada'); document.querySelector('#screen-portada h1').focus()">
+        <span aria-hidden="true">🏠</span>
+      </button>
+    </nav>
     <div class="cal-topbar">
       <div class="cal-topbar-title">Calendario</div>
-      <button class="round-btn" onclick="goTo('portada')" title="Volver a la portada">Portada</button>
     </div>
     <div class="cal-card">
       <div class="cal-controls" style="position:relative;">
