@@ -1,32 +1,40 @@
 # Agenda 2026 · 2027
 
-Agenda personal con calendario, tareas, eventos y notas. Las notas admiten dibujo, texto, subrayado, selección, plantillas, colores de papel y notas adhesivas. Las tareas y las notas se guardan en el almacenamiento local de la aplicación. Cada navegador, perfil o instalación puede tener sus propios datos.
+Agenda personal con calendario, tareas, eventos y un editor de notas con dibujo, texto, plantillas y notas adhesivas. Las tres versiones comparten la interfaz de `web/`. Cada instalación guarda sus propios datos en el dispositivo.
 
-## Probar en local
+## Web
 
-```sh
-python3 -m http.server 8000 --directory web
-```
+Para probarla en el ordenador, ejecuta `python3 -m http.server 8000 --directory web` y abre [http://localhost:8000](http://localhost:8000).
 
-Abre [http://localhost:8000](http://localhost:8000). El servidor de Python solo se usa para el desarrollo. Para alojar la agenda, publica el contenido de `web/` en cualquier alojamiento estático con HTTPS. Puedes publicarlo también bajo un subdirectorio.
+Para publicarla gratis con HTTPS desde un repositorio público de GitHub, selecciona «GitHub Actions» en «Settings → Pages → Build and deployment → Source». El flujo «Publicar Agenda en GitHub Pages» publica el contenido de `web/` al cambiar esa carpeta en `main`. También puedes iniciar el primer despliegue desde la pestaña «Actions». Para el repositorio `ag-hp/agenda-2026-2027`, la dirección será [https://ag-hp.github.io/agenda-2026-2027/](https://ag-hp.github.io/agenda-2026-2027/).
 
-## Instalar
+Después de la primera visita con conexión, la agenda puede abrirse sin conexión. Las fuentes externas pueden usar sus alternativas del sistema.
 
-- **Escritorio.** Abre la web con Chrome o Edge y elige «Instalar Agenda» en el menú del navegador. En Safari para macOS compatible, usa «Archivo → Añadir al Dock».
-- **iPhone y iPad.** En Safari, abre la web por HTTPS y elige «Compartir → Añadir a pantalla de inicio». Abre la agenda desde su icono.
-- **Sin conexión.** Visita la web al menos una vez con conexión para que el navegador descargue los archivos de la aplicación. Las fuentes externas pueden usar sus alternativas del sistema cuando no hay conexión.
+También se puede instalar como aplicación web desde un navegador de escritorio compatible o desde Safari en iPhone y iPad con «Compartir → Añadir a pantalla de inicio».
 
-La instalación anterior utiliza una aplicación web progresiva. Los pasos siguientes sirven para generar un proyecto nativo de iOS con Xcode.
+## Escritorio para Linux
 
-## Compilar para iOS
-
-En un Mac con Node.js 22 o posterior y Xcode 26 o posterior:
+El instalador `.deb` está dirigido a Linux Mint, Ubuntu y sistemas Debian compatibles que ofrezcan GTK 3 y WebKitGTK 4.1. Abre el paquete con el gestor de software o ejecuta:
 
 ```sh
-npm install
-npx cap add ios
-npx cap sync ios
-npx cap open ios
+sudo apt install ./agenda-personal_1.0.0_all.deb
 ```
 
-Ejecuta la aplicación desde Xcode en el simulador o configura tu equipo de firma para instalarla en un dispositivo. Si editas `web/`, vuelve a ejecutar `npx cap sync ios` antes de compilar. Para distribuirla mediante TestFlight o App Store necesitarás la firma y configuración de tu cuenta de Apple Developer.
+Abre «Agenda» desde el menú de aplicaciones. Para generar el paquete desde el código, ejecuta `./desktop/build-deb.sh`. El resultado queda en `dist/`.
+
+## App para iPhone y iPad
+
+Abre `ios/Agenda.xcodeproj` en Xcode. El proyecto incluye la web en el paquete y utiliza SwiftUI y WebKit. Es compatible con iOS y iPadOS 16 o posterior. Para compilar sin firma para el simulador:
+
+```sh
+xcodebuild -project ios/Agenda.xcodeproj -target Agenda -configuration Debug -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO build
+```
+
+Para instalar en un iPhone o iPad desde Xcode, selecciona un equipo en «Signing & Capabilities» y configura un identificador de aplicación disponible en tu cuenta. Para TestFlight o App Store, crea un registro en App Store Connect, archiva la app en Xcode y distribuye la compilación firmada.
+
+## Release
+
+1. Publica la web por HTTPS y comprueba el enlace, el guardado y la apertura sin conexión.
+2. Instala el `.deb` en un equipo compatible y comprueba el inicio y el guardado tras cerrar la app.
+3. Compila y prueba la app de iPhone y iPad. Distribúyela mediante TestFlight o App Store tras firmarla.
+4. Crea la etiqueta `v1.0.0` para la versión validada. En el release de GitHub, adjunta el `.deb` y `agenda-web.zip`. Incluye el enlace a la web publicada y, cuando exista, el enlace de distribución de iOS.

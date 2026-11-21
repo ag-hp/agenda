@@ -1,3 +1,7 @@
 node_modules/
-ios/
+dist/
+__pycache__/
 .DS_Store
+xcuserdata/
+DerivedData/
+ios/build/
