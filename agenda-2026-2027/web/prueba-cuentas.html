@@ -1662,6 +1662,7 @@ window.addEventListener('resize', () => {
       <button type="submit" class="btn-primary" id="accountSubmit" disabled>Iniciar sesión</button>
     </form>
     <button type="button" class="round-btn light" id="accountMode">Crear cuenta</button>
+    <button type="button" class="round-btn light" id="googleAccount">Continuar con Google</button>
     <details class="admin-access" id="accountAdmin">
       <summary>Acceso de administrador</summary>
       <button type="button" class="round-btn light" id="openAdmin">Iniciar sesión como administrador</button>
@@ -1673,6 +1674,7 @@ window.addEventListener('resize', () => {
     #accountForm label { font-size:14px; font-weight:800; }
     #accountForm input { min-height:46px; padding:10px 12px; border:1px solid #adb9cd; border-radius:12px; font:inherit; }
     #accountSubmit { margin-top:8px; }
+    #googleAccount { width:100%; min-height:46px; margin-top:16px; border-color:#adb9cd; }
     #accountSubmit:disabled { opacity:.55; }
     #accountStatus, #accountSaveStatus { font-size:14px; overflow-wrap:anywhere; }
     #accountSaveStatus { margin:4px 0; }
@@ -1794,6 +1796,26 @@ window.addEventListener('resize', () => {
   }
   toggle.onclick = () => selectMode(mode === 'login' ? 'signup' : 'login');
   element('openAdmin').onclick = () => { selectMode('admin'); email.focus(); };
+  const googleButton = element('googleAccount');
+  googleButton.onclick = async () => {
+    googleButton.disabled = true;
+    try {
+      if (!client) throw new Error('Servicio de cuentas no disponible');
+      const settings = await fetch(accountUrl + '/auth/v1/settings', { headers: { apikey: accountKey } });
+      if (!settings.ok) throw new Error('Configuración no disponible');
+      if (!(await settings.json()).external?.google) {
+        message.textContent = 'El acceso con Google está pendiente de activación.';
+        return;
+      }
+      const redirectTo = new URL(location.pathname, location.origin).href;
+      const { error } = await client.auth.signInWithOAuth({ provider:'google', options:{ redirectTo } });
+      if (error) throw error;
+    } catch {
+      message.textContent = 'No se pudo abrir el acceso con Google. Inténtalo de nuevo.';
+    } finally {
+      googleButton.disabled = false;
+    }
+  };
   retry.onclick = () => void flush();
   window.addEventListener('online', () => void flush());
   form.onsubmit = async event => {
