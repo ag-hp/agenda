@@ -1511,6 +1511,100 @@ window.addEventListener('resize', () => {
 if('serviceWorker' in navigator && /^https?:$/.test(location.protocol)){
   navigator.serviceWorker.register('./sw.js').catch(error => console.warn('Agenda sin caché offline', error));
 }
+</script><script>
+/* Local profile selection for this static site. */
+(() => {
+  const profiles = new Map([['usuario', 'Usuario'], ['administrador', 'Administrador']]);
+  const sessionKey = 'agenda.profile';
+  const home = document.getElementById('screen-portada');
+  const homeTitle = home.querySelector('h1');
+  homeTitle.tabIndex = -1;
+  home.insertAdjacentHTML('beforebegin', `
+    <section class="screen" id="screen-acceso" aria-labelledby="accessTitle">
+      <div class="access-card">
+        <h1 class="portada-title" id="accessTitle" tabindex="-1">Iniciar sesión</h1>
+        <p>Elige un perfil local para abrir la Agenda 2026 · 2027.</p>
+        <div class="access-options">
+          <button type="button" class="portada-btn profile-option" data-profile="usuario"><span class="agenda-icon" aria-hidden="true">♙</span><span><strong>Usuario</strong><small>Calendario y notas</small></span><span aria-hidden="true">→</span></button>
+          <button type="button" class="portada-btn profile-option" data-profile="administrador"><span class="agenda-icon" aria-hidden="true">⚙</span><span><strong>Administrador</strong><small>Perfil local de administración</small></span><span aria-hidden="true">→</span></button>
+        </div>
+        <p class="access-note">Los dos perfiles usan los datos de este navegador.</p>
+      </div>
+    </section>`);
+  home.querySelector('.portada-inner').insertAdjacentHTML('beforeend', `
+    <div class="profile-bar"><span id="activeProfile"></span><button type="button" class="round-btn light" id="endProfile">Cerrar sesión</button></div>`);
+  const homeButtons = home.querySelectorAll('.portada-grid button');
+  const calendarIcon = '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 3v4m10-4v4M3 10h18m-14 5h2m3 0h2m3 0h1"/>';
+  const notesIcon = '<path d="M6 3h9l4 4v13a1 1 0 0 1-1 1H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm8 0v5h5M8 12h7m-7 4h7"/>';
+  [calendarIcon, notesIcon].forEach((icon, index) => {
+    homeButtons[index].insertAdjacentHTML('afterbegin', '<span class="agenda-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + icon + '</svg></span>');
+  });
+
+  const style = document.createElement('style');
+  style.textContent = `
+    #screen-acceso, #screen-portada {
+      position:absolute; justify-content:safe center; align-items:center; overflow:auto;
+      padding:calc(18px + env(safe-area-inset-top)) 16px calc(18px + env(safe-area-inset-bottom));
+      background:radial-gradient(ellipse at 85% 0%, #d8ebff, transparent 60%), #f3f5fb;
+    }
+    .access-card, #screen-portada .portada-inner {
+      width:min(100%, 510px); flex:none; padding:clamp(19px, 5vw, 38px);
+      background:white; border:1px solid #dbe5f5; border-radius:28px; box-shadow:0 20px 55px #22396a1c;
+    }
+    .access-card .portada-title { font-size:clamp(30px, 7vw, 46px); }
+    .access-card p, #screen-portada .portada-sub { color:#485570; }
+    .access-note { font-size:13px; margin:18px 0 0; }
+    .access-options { display:grid; gap:12px; margin-top:22px; }
+    #screen-portada .portada-grid { max-width:none; }
+    .access-options .portada-btn, #screen-portada .portada-btn {
+      min-height:74px; border:1px solid #b6cef9; border-radius:17px; background:#edf4ff;
+      color:#15356b; box-shadow:0 4px 0 #d5e4fb; transition:transform .15s ease, box-shadow .15s ease;
+    }
+    .access-options .portada-btn:last-child, #screen-portada .portada-btn:last-child {
+      background:#f4efff; color:#462977; border-color:#d9c9f7; box-shadow:0 4px 0 #e6dafb;
+    }
+    .profile-option { display:grid; grid-template-columns:auto minmax(0, 1fr) auto; gap:12px; text-align:left; padding:12px; width:100%; }
+    .profile-option strong, .profile-option small { display:block; }
+    .profile-option small { margin-top:2px; }
+    .agenda-icon { display:grid; place-items:center; width:42px; height:42px; border-radius:13px; background:#174cab; color:white; font-size:22px; }
+    .agenda-icon svg { width:23px; height:23px; }
+    .portada-btn:last-child .agenda-icon { background:#683eaa; }
+    .portada-btn:hover { transform:translateY(-2px); }
+    .portada-btn:active { transform:translateY(2px); }
+    .profile-bar { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:24px; padding-top:14px; border-top:1px solid #dbe5f5; font-size:14px; font-weight:800; color:#485570; }
+    #endProfile { min-height:44px; border-color:#b6cef9; }
+    #screen-portada .years { color:#205dc2; }
+    .round-btn:not(.light), .btn-primary, .year-pill, .save-btn, .tool-btn.on { background:#205dc2; }
+    button:focus-visible { outline:3px solid #174cab; outline-offset:3px; }
+    @media (prefers-reduced-motion:reduce) { .screen, .portada-btn { transition:none !important; } }
+  `;
+  document.head.append(style);
+
+  function enterProfile(profile, focusHeading = true) {
+    document.getElementById('activeProfile').textContent = profiles.get(profile);
+    goTo('portada');
+    if (focusHeading) homeTitle.focus();
+  }
+
+  let savedProfile;
+  try { savedProfile = sessionStorage.getItem(sessionKey); } catch {}
+  if (profiles.has(savedProfile)) enterProfile(savedProfile, false);
+  else goTo('acceso');
+
+  document.querySelectorAll('#screen-acceso [data-profile]').forEach(button => {
+    button.addEventListener('click', () => {
+      const profile = button.dataset.profile;
+      try { sessionStorage.setItem(sessionKey, profile); } catch {}
+      enterProfile(profile);
+    });
+  });
+  document.getElementById('endProfile').addEventListener('click', () => {
+    try { sessionStorage.removeItem(sessionKey); } catch {}
+    goTo('acceso');
+    document.getElementById('accessTitle').focus();
+  });
+})();
 </script>
+
 </body>
 </html>
