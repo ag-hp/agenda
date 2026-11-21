@@ -371,14 +371,15 @@
   .calendar-menu {
     grid-column:1; grid-row:1 / -1; display:flex; flex-direction:column;
     align-items:center; gap:8px; padding:8px 4px;
-    background:#f3f6fc; border-radius:18px;
+    min-height:0; overflow-y:auto; background:#f3f6fc; border-radius:18px;
   }
   .calendar-menu-button {
-    display:grid; place-items:center; width:44px; height:44px; cursor:pointer;
+    display:grid; place-items:center; flex-shrink:0; width:44px; height:44px; cursor:pointer;
     font-size:24px; line-height:1; background:#fff;
     border:1px solid #d7e2f3; border-radius:13px;
   }
   .calendar-menu-button:hover { background:#e5efff; }
+  .calendar-menu-plus { color:#174cab; font-size:30px; font-weight:900; }
   #screen-calendario .cal-topbar,
   #screen-calendario .google-calendar-controls,
   #screen-calendario .cal-card { grid-column:2; margin:0; }
@@ -386,9 +387,11 @@
   #screen-calendario .google-calendar-controls { grid-row:2; }
   #screen-calendario .cal-card { grid-row:3; }
   @media (max-width:520px) {
-    #screen-calendario { grid-template-columns:48px minmax(0, 1fr); gap:8px; }
-    .calendar-menu { grid-row:1 / 3; align-self:start; padding:2px; }
-    #screen-calendario .cal-card { grid-column:1 / -1; }
+    #screen-calendario { grid-template-columns:48px minmax(0, 1fr); gap:8px; padding-inline:8px; }
+    .calendar-menu { padding:6px 2px; }
+    #screen-calendario .cal-card { padding-inline:8px; }
+    #screen-calendario .cal-controls { gap:6px; }
+    #screen-calendario .day-cell { padding-inline:2px; }
   }
 </style>
 </head>
@@ -414,6 +417,16 @@
       <button class="calendar-menu-button" type="button" title="Volver a la portada"
         aria-label="Volver a la portada" onclick="goTo('portada'); document.querySelector('#screen-portada h1').focus()">
         <span aria-hidden="true">🏠</span>
+      </button>
+      <button class="calendar-menu-button" type="button" title="Notas" aria-label="Ir a Notas"
+        onclick="goTo('notas'); document.querySelector('#screen-notas .notas-title').focus()">
+        <span aria-hidden="true">📒</span>
+      </button>
+      <button class="calendar-menu-button" type="button" title="Hoy" aria-label="Ir a hoy" onclick="showToday()">
+        <span aria-hidden="true">📅</span>
+      </button>
+      <button class="calendar-menu-button" type="button" title="Añadir evento hoy" aria-label="Añadir evento hoy" onclick="showToday(true)">
+        <span aria-hidden="true" class="calendar-menu-plus">+</span>
       </button>
     </nav>
     <div class="cal-topbar">
@@ -458,7 +471,7 @@
   <!-- NOTAS GALLERY -->
   <div class="screen" id="screen-notas">
     <div class="notas-topbar">
-      <div class="notas-title">Notas</div>
+      <div class="notas-title" tabindex="-1">Notas</div>
       <div class="notas-topbar-right">
         <button class="new-note-btn" onclick="createNote()">Nueva nota</button>
         <button class="round-btn" onclick="goTo('portada')">Portada</button>
@@ -637,6 +650,21 @@ document.addEventListener('click', e=>{
   const drop = document.getElementById('yearDrop');
   if(drop && !e.target.closest('.year-pill') && !e.target.closest('.month-name')) drop.classList.remove('open');
 });
+
+function showToday(addEvent = false){
+  const date = new Date();
+  curYear = date.getFullYear();
+  curMonth = date.getMonth();
+  const day = date.getDate();
+  selectedKey = curYear + '-' + curMonth + '-' + day;
+  renderCalendar();
+  if(addEvent){
+    openDay(curYear, curMonth, day);
+    document.getElementById('newItemText').focus();
+  } else {
+    document.querySelector('#daysGrid .day-cell.today')?.focus();
+  }
+}
 
 function shiftMonth(dir){
   curMonth += dir;
