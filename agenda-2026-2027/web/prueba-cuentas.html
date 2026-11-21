@@ -1874,7 +1874,192 @@ window.addEventListener('resize', () => {
     finally { submit.disabled = !client; }
   })();
 })();
+</script><script>
+/* Read-only Google Calendar integration. */
+(() => {
+  const clientId = '1076956380277-pvoilisun526ahvltflo9p6sc8sumoaa.apps.googleusercontent.com';
+  const scope = 'https://www.googleapis.com/auth/calendar.events.readonly';
+  const controls = document.createElement('section');
+  controls.className = 'google-calendar-controls';
+  controls.setAttribute('aria-label', 'Google Calendar');
+  controls.innerHTML = '<div><button type="button" class="round-btn light" id="connectGoogleCalendar">Conectar Google Calendar</button><button type="button" class="round-btn light" id="disconnectGoogleCalendar" hidden>Desconectar</button></div><p role="status" id="googleCalendarStatus"></p>';
+  document.querySelector('#screen-calendario .cal-topbar').after(controls);
+  const connect = controls.querySelector('#connectGoogleCalendar');
+  const disconnect = controls.querySelector('#disconnectGoogleCalendar');
+  const status = controls.querySelector('#googleCalendarStatus');
+  const style = document.createElement('style');
+  style.textContent = '.google-calendar-controls{margin:0 0 12px}.google-calendar-controls>div{display:flex;gap:8px;flex-wrap:wrap}.google-calendar-controls [hidden]{display:none}.google-calendar-controls p{margin:5px 0 0;font-size:13px;color:#485570}.google-calendar-controls p:empty{display:none}.day-tag.google-event{background:#edf4ff;color:#174cab}.day-item.google-event{border-left-color:#205dc2}.day-item.google-event .google-label{font-size:12px;color:#485570}';
+  document.head.append(style);
+  const dayFormat = new Intl.DateTimeFormat('es-ES', { hour:'2-digit', minute:'2-digit' });
+  let token = '';
+  let tokenClient;
+  let initializing = false;
+  let authorizing = false;
+  let activeRequest;
+  let requestedMonth;
+  let eventsByDay = new Map();
+
+  const existingCalendar = renderCalendar;
+  const existingDay = renderDayList;
+  const existingNavigation = goTo;
+  function textElement(tag, className, text) {
+    const el = document.createElement(tag);
+    el.className = className;
+    el.textContent = text;
+    return el;
+  }
+  renderCalendar = () => {
+    existingCalendar();
+    document.querySelectorAll('#daysGrid .day-cell:not(:disabled)').forEach((cell, index) => {
+      const events = eventsByDay.get(curYear + '-' + curMonth + '-' + (index + 1)) ?? [];
+      for (const event of events.slice(0, 2)) {
+        const tag = textElement('span', 'day-tag google-event', event.title);
+        tag.title = 'Google Calendar · ' + event.title;
+        cell.append(tag);
+      }
+    });
+    if (token && requestedMonth !== curYear + '-' + curMonth) void loadMonth();
+  };
+  renderDayList = () => {
+    existingDay();
+    const events = eventsByDay.get(window._curDayKey) ?? [];
+    if (!events.length) return;
+    const list = document.getElementById('dayList');
+    list.querySelector('.day-empty')?.remove();
+    for (const event of events) {
+      const row = textElement('div', 'day-item google-event', '');
+      row.append(textElement('span', 'time', event.time), textElement('span', 'label', event.title), textElement('span', 'google-label', 'Google Calendar'));
+      list.append(row);
+    }
+  };
+  function redraw() {
+    renderCalendar();
+    if (document.getElementById('screen-day').classList.contains('active')) renderDayList();
+  }
+  function dateOnly(value) {
+    const [year, month, day] = value.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  }
+  function addEvent(index, item, first, after) {
+    if (!item.start || !item.end || item.status === 'cancelled') return;
+    const start = item.start.date ? dateOnly(item.start.date) : new Date(item.start.dateTime);
+    const end = item.end.date ? dateOnly(item.end.date) : new Date(item.end.dateTime);
+    if (!Number.isFinite(+start) || !Number.isFinite(+end)) return;
+    const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const last = Math.min(+after, Math.max(+end, +start + 1));
+    const day = new Date(Math.max(+first, +startDay));
+    while (+day < last) {
+      const key = day.getFullYear() + '-' + day.getMonth() + '-' + day.getDate();
+      const entries = index.get(key) ?? [];
+      entries.push({title:item.summary || 'Evento sin título', time:item.start.date ? 'Todo el día' : +day === +startDay ? dayFormat.format(start) : 'En curso'});
+      index.set(key, entries);
+      day.setDate(day.getDate() + 1);
+    }
+  }
+  async function loadMonth() {
+    if (!token) return;
+    activeRequest?.abort();
+    const request = new AbortController();
+    activeRequest = request;
+    requestedMonth = curYear + '-' + curMonth;
+    const first = new Date(curYear, curMonth, 1);
+    const after = new Date(curYear, curMonth + 1, 1);
+    const query = new URLSearchParams({timeMin:first.toISOString(), timeMax:after.toISOString(), singleEvents:'true', orderBy:'startTime', maxResults:'250', fields:'nextPageToken,items(summary,status,start,end)'});
+    const index = new Map();
+    status.textContent = 'Cargando eventos de Google Calendar…';
+    try {
+      do {
+        const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?' + query, {headers:{Authorization:'Bearer ' + token},signal:request.signal});
+        if (response.status === 401) {
+          if (activeRequest === request) clearConnection('La conexión caducó. Vuelve a conectar Google Calendar.');
+          return;
+        }
+        if (!response.ok) throw new Error(String(response.status));
+        const data = await response.json();
+        for (const event of data.items ?? []) addEvent(index, event, first, after);
+        if (!data.nextPageToken) break;
+        query.set('pageToken', data.nextPageToken);
+      } while (!request.signal.aborted);
+      if (activeRequest !== request || request.signal.aborted) return;
+      eventsByDay = index;
+      status.textContent = 'Calendario principal de Google · Solo lectura';
+      redraw();
+    } catch (error) {
+      if (request.signal.aborted) return;
+      eventsByDay.clear();
+      status.textContent = error.message === '403'
+        ? 'Google Calendar no está disponible para esta conexión. Comprueba que la API esté activada y hayas concedido acceso.'
+        : 'No se pudieron cargar los eventos. Pulsa Actualizar para reintentar.';
+      redraw();
+    }
+  }
+  function clearConnection(message = '') {
+    authorizing = false;
+    activeRequest?.abort();
+    token = '';
+    requestedMonth = undefined;
+    eventsByDay.clear();
+    connect.disabled = false;
+    connect.textContent = 'Conectar Google Calendar';
+    disconnect.hidden = true;
+    status.textContent = message;
+    redraw();
+  }
+  function initialize() {
+    if (tokenClient || initializing) return;
+    initializing = true;
+    connect.disabled = true;
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.onload = () => {
+      initializing = false;
+      connect.disabled = false;
+      const oauth = window.google.accounts.oauth2;
+      tokenClient = oauth.initTokenClient({client_id:clientId, scope, include_granted_scopes:false, callback:response => {
+        if (!authorizing) return;
+        authorizing = false;
+        connect.disabled = false;
+        if (response.error || !oauth.hasGrantedAllScopes(response, scope)) {
+          status.textContent = 'No se concedió acceso de lectura a Google Calendar.';
+          return;
+        }
+        token = response.access_token;
+        connect.textContent = 'Actualizar Google Calendar';
+        disconnect.hidden = false;
+        void loadMonth();
+      }, error_callback:() => {
+        authorizing = false;
+        connect.disabled = false;
+        status.textContent = 'No se completó la conexión con Google Calendar.';
+      }});
+    };
+    script.onerror = () => {
+      initializing = false;
+      connect.disabled = false;
+      script.remove();
+      status.textContent = 'No se pudo cargar Google. Vuelve a intentarlo.';
+    };
+    document.head.append(script);
+  }
+  goTo = name => {
+    existingNavigation(name);
+    if (name === 'calendario' && document.getElementById('screen-calendario').classList.contains('active')) initialize();
+    if (name === 'acceso') clearConnection();
+  };
+  connect.onclick = () => {
+    if (token) { void loadMonth(); return; }
+    if (!tokenClient) { initialize(); return; }
+    authorizing = true;
+    connect.disabled = true;
+    status.textContent = '';
+    try { tokenClient.requestAccessToken({prompt:'select_account'}); }
+    catch { clearConnection('No se pudo abrir la conexión con Google Calendar.'); }
+  };
+  disconnect.onclick = () => clearConnection('Google Calendar se ha desconectado de esta sesión.');
+})();
 </script>
+
 
 
 
