@@ -1646,7 +1646,214 @@ if('serviceWorker' in navigator && /^https?:$/.test(location.protocol)){
   `;
   document.head.append(style);
 }
+</script><script>
+/* Account access and private agenda synchronization. */
+(() => {
+  const accountUrl = 'https://bymtsaeszjjgbcnqsrib.supabase.co';
+  const accountKey = 'sb_publishable_mFRGdOML0Xcja3VkvPCKGA_cZMEBNu_';
+  const element = id => document.getElementById(id);
+  const access = element('screen-acceso');
+  access.querySelector('.access-card').innerHTML = `
+    <h1 class="portada-title" id="accessTitle" tabindex="-1">Iniciar sesión</h1>
+    <p>Guarda tus notas y eventos en tu cuenta.</p>
+    <form id="accountForm">
+      <label for="accountEmail">Correo electrónico</label>
+      <input id="accountEmail" type="email" autocomplete="email" required>
+      <label for="accountPassword">Contraseña</label>
+      <input id="accountPassword" type="password" autocomplete="current-password" required>
+      <button type="submit" class="btn-primary" id="accountSubmit" disabled>Iniciar sesión</button>
+    </form>
+    <button type="button" class="round-btn light" id="accountMode">Crear cuenta</button>
+    <details class="admin-access" id="accountAdmin">
+      <summary>Acceso de administrador</summary>
+      <button type="button" class="round-btn light" id="openAdmin">Iniciar sesión como administrador</button>
+    </details>
+    <p id="accountStatus" role="status">Conectando…</p>`;
+  const style = document.createElement('style');
+  style.textContent = `
+    #accountForm { display:grid; gap:9px; margin:20px 0 12px; }
+    #accountForm label { font-size:14px; font-weight:800; }
+    #accountForm input { min-height:46px; padding:10px 12px; border:1px solid #adb9cd; border-radius:12px; font:inherit; }
+    #accountSubmit { margin-top:8px; }
+    #accountSubmit:disabled { opacity:.55; }
+    #accountStatus, #accountSaveStatus { font-size:14px; overflow-wrap:anywhere; }
+    #accountSaveStatus { margin:4px 0; }
+  `;
+  document.head.append(style);
+
+  const oldSignOut = element('endProfile');
+  const signOut = oldSignOut.cloneNode(true);
+  oldSignOut.replaceWith(signOut);
+  element('activeProfile').insertAdjacentHTML('afterend', '<p id="accountSaveStatus" role="status"></p><button type="button" id="retryAccountSave" class="round-btn light" hidden>Reintentar guardado</button>');
+  const form = element('accountForm');
+  const email = element('accountEmail');
+  const password = element('accountPassword');
+  const submit = element('accountSubmit');
+  const toggle = element('accountMode');
+  const message = element('accountStatus');
+  const retry = element('retryAccountSave');
+  let client;
+  let owner;
+  let mode = 'login';
+  let revision = 0;
+  let pending = {};
+  let flushing;
+
+  const navigate = goTo;
+  goTo = name => { if (owner || name === 'acceso') navigate(name); };
+  function setData(data = {}) {
+    events = data.events ?? {};
+    notes = data.notes ?? [];
+    currentNote = null;
+    selectedKey = null;
+    renderCalendar();
+    renderNotasGrid();
+  }
+  function status(text, failed = false) {
+    element('accountSaveStatus').textContent = text;
+    retry.hidden = !failed;
+  }
+  function leave() {
+    revision++;
+    owner = undefined;
+    pending = {};
+    setData();
+    status('');
+    element('activeProfile').textContent = '';
+    goTo('acceso');
+  }
+  function persistPending() {
+    if (!owner) return;
+    try {
+      const key = 'agenda.pending.' + owner;
+      if (Object.keys(pending).length) localStorage.setItem(key, JSON.stringify(pending));
+      else localStorage.removeItem(key);
+    } catch { /* Retain the in-memory copy during this session. */ }
+  }
+  function flush() {
+    if (flushing) return flushing;
+    if (!owner || !Object.keys(pending).length) return Promise.resolve(true);
+    const userId = owner;
+    const attempt = revision;
+    flushing = (async () => {
+      while (Object.keys(pending).length && revision === attempt) {
+        const [collection, payload] = Object.entries(pending)[0];
+        status('Guardando cambios…');
+        try {
+          const result = await client.from('agenda_data').upsert(
+            { user_id: userId, collection, payload }, { onConflict: 'user_id,collection' }
+          );
+          if (revision !== attempt) return false;
+          if (result.error) throw result.error;
+          if (pending[collection] === payload) delete pending[collection];
+          persistPending();
+        } catch {
+          if (revision === attempt) status('Hay cambios pendientes de guardar.', true);
+          return false;
+        }
+      }
+      if (revision !== attempt) return false;
+      status('Cambios guardados');
+      return true;
+    })().finally(() => {
+      flushing = undefined;
+      if (owner && revision !== attempt) void flush();
+    });
+    return flushing;
+  }
+  storeData = (collection, value) => {
+    if (!owner || !['events', 'notes'].includes(collection)) return false;
+    pending[collection] = JSON.parse(JSON.stringify(value, (key, item) => key === 'el' ? undefined : item));
+    persistPending();
+    void flush();
+    return true;
+  };
+  async function enter(user) {
+    const attempt = ++revision;
+    const { data, error } = await client.from('agenda_data').select('collection,payload').eq('user_id', user.id);
+    if (attempt !== revision) return;
+    if (error) throw error;
+    owner = user.id;
+    try { pending = JSON.parse(localStorage.getItem('agenda.pending.' + owner)) ?? {}; }
+    catch { pending = {}; }
+    setData({ ...Object.fromEntries(data.map(row => [row.collection, row.payload])), ...pending });
+    element('activeProfile').textContent = user.email ?? 'Mi cuenta';
+    goTo('portada');
+    document.querySelector('#screen-portada h1').focus();
+    void flush();
+  }
+  function selectMode(next) {
+    mode = next;
+    const label = { login: 'Iniciar sesión', signup: 'Crear cuenta', admin: 'Iniciar sesión como administrador' }[next];
+    element('accessTitle').textContent = submit.textContent = label;
+    toggle.textContent = next === 'login' ? 'Crear cuenta' : 'Volver a iniciar sesión';
+    password.autocomplete = next === 'signup' ? 'new-password' : 'current-password';
+    password.minLength = next === 'signup' ? 8 : 0;
+    message.textContent = '';
+    if (next !== 'admin') element('accountAdmin').open = false;
+  }
+  toggle.onclick = () => selectMode(mode === 'login' ? 'signup' : 'login');
+  element('openAdmin').onclick = () => { selectMode('admin'); email.focus(); };
+  retry.onclick = () => void flush();
+  window.addEventListener('online', () => void flush());
+  form.onsubmit = async event => {
+    event.preventDefault();
+    if (!client || submit.disabled) return;
+    const action = mode;
+    const credentials = { email: email.value.trim(), password: password.value };
+    submit.disabled = toggle.disabled = element('openAdmin').disabled = true;
+    message.textContent = 'Conectando…';
+    try {
+      const result = action === 'signup'
+        ? await client.auth.signUp(credentials)
+        : await client.auth.signInWithPassword(credentials);
+      if (result.error) throw result.error;
+      if (!result.data.session) {
+        message.textContent = 'Revisa tu correo para confirmar la cuenta.';
+        return;
+      }
+      if (action === 'admin' && result.data.user.app_metadata?.role !== 'admin') {
+        await client.auth.signOut({ scope: 'local' });
+        message.textContent = 'Esta cuenta no tiene permiso de administrador.';
+        return;
+      }
+      await enter(result.data.user);
+    } catch {
+      message.textContent = action === 'signup'
+        ? 'No se pudo completar el registro. Comprueba el correo o inténtalo más tarde.'
+        : 'No se pudo abrir tu cuenta. Comprueba tus datos de acceso y la conexión.';
+    } finally {
+      password.value = '';
+      submit.disabled = toggle.disabled = element('openAdmin').disabled = false;
+    }
+  };
+  signOut.onclick = async () => {
+    signOut.disabled = true;
+    try {
+      if (!await flush()) return;
+      const { error } = await client.auth.signOut({ scope: 'local' });
+      if (error) { status('No se pudo cerrar la sesión. Inténtalo de nuevo.'); return; }
+      leave();
+      form.reset();
+      selectMode('login');
+      element('accessTitle').focus();
+    } finally { signOut.disabled = false; }
+  };
+  leave();
+  void (async () => {
+    try {
+      const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+      client = createClient(accountUrl, accountKey);
+      client.auth.onAuthStateChange(event => { if (event === 'SIGNED_OUT') leave(); });
+      const { data } = await client.auth.getUser();
+      if (data.user) await enter(data.user);
+      message.textContent = '';
+    } catch { message.textContent = 'No se pudo conectar con el servicio de cuentas.'; }
+    finally { submit.disabled = !client; }
+  })();
+})();
 </script>
+
 
 
 
