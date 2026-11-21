@@ -1610,7 +1610,8 @@ if('serviceWorker' in navigator && /^https?:$/.test(location.protocol)){
   const theme = document.createElement('style');
   theme.textContent = `
     :root { --blue:#205dc2; --blue-dark:#205dc2; --blue-tint:#edf4ff; }
-    #app .screen { background:var(--bg); }
+    body, #app .screen { background:var(--bg); }
+    #app { box-shadow:none; }
     #screen-acceso .access-card, #screen-portada .portada-inner {
       background:transparent; border:0; box-shadow:none;
     }
