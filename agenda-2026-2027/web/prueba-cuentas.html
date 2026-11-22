@@ -499,8 +499,9 @@
     width:100%; max-width:184px; min-width:0; padding:0; color:#172a44; background:none;
     text-align:left; font:inherit; border:0; border-radius:8px; cursor:pointer;
   }
+  .book-gallery-art { position:relative; display:block; width:100%; margin-bottom:5px; }
   .book-gallery-card .book-cover {
-    flex:none; width:100%; height:auto; aspect-ratio:2 / 3; margin-bottom:5px;
+    flex:none; width:100%; height:auto; aspect-ratio:2 / 3;
     border-radius:7px; box-shadow:0 4px 12px #17243c24;
     transition:box-shadow .18s ease;
   }
@@ -510,9 +511,17 @@
   .book-gallery-title {
     width:100%; font-size:clamp(1rem,2vw,1.18rem); line-height:1.18; overflow-wrap:anywhere;
   }
-  .book-gallery-author { width:100%; color:#475973; line-height:1.25; overflow-wrap:anywhere; font-size:.84rem; }
-  .book-gallery-rating { color:#6c7890; line-height:1.2; letter-spacing:.025em; }
-  .book-gallery-rating .is-rated { color:#915300; }
+  .book-gallery-author, .book-gallery-rating {
+    position:absolute; padding:4px 6px; border-radius:5px;
+    color:#fff; background:#17243ce8; line-height:1.2;
+  }
+  .book-gallery-author {
+    top:6px; right:6px; max-width:calc(100% - 12px);
+    font-size:.72rem; font-weight:700; text-align:right; overflow-wrap:anywhere;
+    overflow:hidden; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2;
+  }
+  .book-gallery-rating { bottom:6px; left:6px; font-size:.8rem; letter-spacing:.025em; }
+  .book-gallery-rating .is-rated { color:#ffd279; }
   @media (prefers-reduced-motion:reduce) { .book-gallery-card .book-cover { transition:none; } }
   #bookDetails { width:min(400px,calc(100% - 24px)); border:1px solid #bdcde4; border-radius:16px; color:#18283f; padding:18px; }
   #bookDetails::backdrop { background:#17243c70; }
@@ -2554,12 +2563,9 @@ window.addEventListener('resize', () => {
     stars.setAttribute('aria-hidden', 'true');
     stars.append(makeElement('span', 'is-rated', '★'.repeat(rating)));
     stars.append(makeElement('span', '', '☆'.repeat(5 - rating)));
-    card.append(
-      cover(book),
-      makeElement('strong', 'book-gallery-title', book.title),
-      makeElement('span', 'book-gallery-author', author),
-      stars
-    );
+    const art = makeElement('span', 'book-gallery-art');
+    art.append(cover(book), stars, makeElement('span', 'book-gallery-author', author));
+    card.append(art, makeElement('strong', 'book-gallery-title', book.title));
     card.addEventListener('click', () => showDetails(book));
     return card;
   }
