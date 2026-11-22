@@ -125,28 +125,33 @@
     box-shadow:0 20px 46px rgba(20,30,50,.10); overflow:hidden;
   }
   .cal-controls{ display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
-  .month-picker{ display:flex; align-items:center; gap:4px; background:var(--bg-2); border-radius:var(--r-pill); padding:6px 8px; }
-  .month-picker button{
-    height:30px; padding:0 6px; border-radius:var(--r-pill); border:none; background:transparent; color:var(--ink); font:800 11px var(--font-body); cursor:pointer;
-    display:flex; align-items:center; justify-content:center;
+  .calendar-period-field {
+    display:grid; gap:2px; padding:5px 8px; flex:0 1 auto;
+    border:1px solid #d4e0f4; border-radius:13px; background:#f3f7ff;
   }
-  .month-picker button:active{ background:rgba(46,158,255,.15); }
-  .month-name{
-    font-family:var(--font-display); font-weight:700; font-size:21px; color:var(--ink);
-    text-transform:lowercase; min-width:92px; text-align:center; cursor:pointer;
+  .calendar-period-field span { padding-inline:4px; color:#485570; font-size:12px; font-weight:800; }
+  .calendar-period-field select {
+    min-height:32px; max-width:100%; padding:2px 4px; cursor:pointer;
+    color:#173c78; background:transparent; border:0; border-radius:6px;
+    font:800 clamp(14px, 2.2vw, 19px) var(--font-body);
   }
-  .year-pill{
-    font-family:var(--font-body); font-weight:800; font-size:14.5px; color:#fff;
-    background:var(--blue); border:none; border-radius:var(--r-pill); padding:10px 16px;
-    cursor:pointer; display:flex; align-items:center; gap:6px; box-shadow:0 6px 14px rgba(46,158,255,.3);
+  .calendar-period-arrow {
+    width:36px; height:36px; flex:none; align-self:end; cursor:pointer;
+    border:1px solid #d4e0f4; border-radius:12px; background:white;
+    color:#174cab; font:800 25px/1 var(--font-body);
   }
-  .year-dropdown{
-    position:absolute; margin-top:46px; background:#fff; border-radius:16px; border:1.5px solid var(--border);
-    box-shadow:0 12px 30px rgba(20,30,50,.14); overflow:hidden; z-index:20; display:none;
+  .calendar-period-arrow:hover { background:#edf4ff; }
+  .calendar-period-field select:focus-visible, .calendar-period-arrow:focus-visible {
+    outline:2px solid var(--blue); outline-offset:2px;
   }
-  .year-dropdown.open{ display:block; }
-  .year-dropdown div{ padding:10px 22px; font-size:14px; font-weight:700; cursor:pointer; }
-  .year-dropdown div:hover{ background:var(--bg-2); }
+  @media (max-width:520px) {
+    .calendar-period-field { padding-inline:3px; }
+    .calendar-period-arrow { width:30px; }
+  }
+  .day-cell.birthday, .day-cell.birthday:hover { background:#ffe5f1; }
+  .birthday-crown { font-size:15px; line-height:1; }
+  .day-cell.birthday .day-num { width:auto; max-width:100%; gap:2px; flex-wrap:wrap; height:auto; min-height:28px; }
+  .day-tag.birthday-event, .day-tag.google-event.birthday-event { background:#ffe5f1; color:#85234e; }
 
   .weekdays{ display:grid; grid-template-columns:repeat(7,1fr); margin-bottom:2px; }
   .weekdays span{
@@ -470,16 +475,17 @@
       <div class="cal-topbar-title">Calendario</div>
     </div>
     <div class="cal-card">
-      <div class="cal-controls" style="position:relative;">
-        <div class="month-picker">
-          <button onclick="shiftMonth(-1)">Anterior</button>
-          <div class="month-name" id="monthName" onclick="toggleYearDrop()">enero</div>
-          <button onclick="shiftMonth(1)">Siguiente</button>
-        </div>
-        <button class="year-pill" onclick="toggleYearDrop()">
-          <span id="yearLabel">2026</span>
-        </button>
-        <div class="year-dropdown" id="yearDrop"></div>
+            <div class="cal-controls">
+        <button class="calendar-period-arrow" type="button" aria-label="Mes anterior" title="Mes anterior" onclick="shiftMonth(-1)">‹</button>
+        <label class="calendar-period-field">
+          <span>Mes</span>
+          <select id="calendarMonth"></select>
+        </label>
+        <label class="calendar-period-field">
+          <span>Año</span>
+          <select id="calendarYear"></select>
+        </label>
+        <button class="calendar-period-arrow" type="button" aria-label="Mes siguiente" title="Mes siguiente" onclick="shiftMonth(1)">›</button>
       </div>
       <div class="weekdays">
         <span>LUN</span><span>MAR</span><span>MIÉ</span><span>JUE</span><span>VIE</span><span>SÁB</span><span>DOM</span>
@@ -500,7 +506,7 @@
     <div class="day-list" id="dayList"></div>
     <form class="add-row" onsubmit="event.preventDefault(); addDayItem()">
       <input type="text" id="newItemText" aria-label="Tarea o evento" maxlength="240" required placeholder="Añade una tarea o evento...">
-      <select id="newItemColor" aria-label="Color"><option value="pink">Rojo</option><option value="green">Verde</option></select>
+      <select id="newItemColor" aria-label="Color o tipo de evento"><option value="pink">Rojo</option><option value="green">Verde</option><option value="birthday">Cumpleaños</option></select>
       <button class="round-btn" type="submit" aria-label="Añadir">Añadir</button>
     </form>
   </div>
@@ -669,24 +675,37 @@ function storeData(key, value){
 }
 let events = loadData('events', {});
 
-function toggleYearDrop(){
-  const d = document.getElementById('yearDrop');
-  if(d.classList.contains('open')){ d.classList.remove('open'); return; }
-  d.innerHTML = '';
-  const startYear = Math.min(2025, curYear - 2);
-  const endYear = Math.max(2028, curYear + 2);
-  for(let y = startYear; y <= endYear; y++){
-    const el = document.createElement('div');
-    el.textContent = y;
-    el.onclick = ()=>{ curYear = y; renderCalendar(); d.classList.remove('open'); };
-    d.appendChild(el);
+const monthSelect = document.getElementById('calendarMonth');
+const yearSelect = document.getElementById('calendarYear');
+MONTHS.forEach((month, index) => monthSelect.add(new Option(month[0].toUpperCase() + month.slice(1), index)));
+monthSelect.onchange = () => { curMonth = Number(monthSelect.value); renderCalendar(); };
+yearSelect.onchange = () => { curYear = Number(yearSelect.value); renderCalendar(); };
+
+function updatePeriodSelectors(){
+  monthSelect.value = String(curMonth);
+  const newest = Math.max(new Date().getFullYear() + 2, curYear);
+  const oldest = Math.min(2000, curYear);
+  if(Number(yearSelect.options[0]?.value) !== newest || Number(yearSelect.options[yearSelect.length - 1]?.value) !== oldest){
+    yearSelect.replaceChildren();
+    for(let year = newest; year >= oldest; year--) yearSelect.add(new Option(year, year));
   }
-  d.classList.add('open');
+  yearSelect.value = String(curYear);
 }
-document.addEventListener('click', e=>{
-  const drop = document.getElementById('yearDrop');
-  if(drop && !e.target.closest('.year-pill') && !e.target.closest('.month-name')) drop.classList.remove('open');
-});
+
+function isBirthdayTitle(title){
+  return /\b(cumpleaños|cumple|birthday)\b/i.test(title ?? '');
+}
+
+function markBirthday(cell){
+  if(cell.classList.contains('birthday')) return;
+  cell.classList.add('birthday');
+  const crown = document.createElement('span');
+  crown.className = 'birthday-crown';
+  crown.setAttribute('role', 'img');
+  crown.setAttribute('aria-label', 'Cumpleaños');
+  crown.textContent = '👑';
+  cell.querySelector('.day-num').append(crown);
+}
 
 function showToday(addEvent = false){
   const date = new Date();
@@ -711,8 +730,7 @@ function shiftMonth(dir){
 }
 
 function renderCalendar(){
-  document.getElementById('monthName').textContent = MONTHS[curMonth];
-  document.getElementById('yearLabel').textContent = curYear;
+  updatePeriodSelectors();
   const grid = document.getElementById('daysGrid');
   grid.innerHTML = '';
 
@@ -747,10 +765,14 @@ function renderCalendar(){
     num.textContent = c.d;
     div.appendChild(num);
 
+    if(!c.outside && ((curMonth === 6 && c.d === 24) || events[key]?.some(ev=>ev.birthday || isBirthdayTitle(ev.label)))){
+      markBirthday(div);
+    }
     if(!c.outside && events[key]){
       events[key].slice(0,2).forEach(ev=>{
         const tag = document.createElement('div');
         tag.className = 'day-tag tag-' + ev.color;
+        if(ev.birthday || isBirthdayTitle(ev.label)) tag.classList.add('birthday-event');
         tag.textContent = ev.label;
         div.appendChild(tag);
       });
@@ -785,19 +807,21 @@ function renderDayList(){
     row.className = 'day-item' + (it.color==='green' ? ' green' : '');
     row.innerHTML = '<div class="time"></div><div class="label"></div><button class="del" type="button" aria-label="Eliminar">Eliminar</button>';
     row.querySelector('.time').textContent = it.time || '';
-    row.querySelector('.label').textContent = it.label;
+    row.querySelector('.label').textContent = (it.birthday || isBirthdayTitle(it.label) ? '👑 ' : '') + it.label;
     row.querySelector('button').onclick = () => delDayItem(idx);
     list.appendChild(row);
   });
 }
 function addDayItem(){
   const text = document.getElementById('newItemText');
-  const color = document.getElementById('newItemColor').value;
+  const category = document.getElementById('newItemColor').value;
+  const birthday = category === 'birthday' || isBirthdayTitle(text.value);
+  const color = category === 'birthday' ? 'pink' : category;
   if(!text.value.trim()) return;
   const now = new Date();
   const time = now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
   const key = window._curDayKey;
-  const next = {...events, [key]: [...(events[key] || []), {time, label:text.value.trim(), color}]};
+  const next = {...events, [key]: [...(events[key] || []), {time, label:text.value.trim(), color, birthday}]};
   if(!storeData('events', next)) return;
   events = next;
   text.value = '';
@@ -1674,7 +1698,7 @@ window.addEventListener('resize', () => {
     .profile-bar { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:24px; padding-top:14px; border-top:1px solid #dbe5f5; font-size:14px; font-weight:800; color:#485570; }
     #endProfile { min-height:44px; border-color:#b6cef9; }
     #screen-portada .years { color:#205dc2; }
-    .round-btn:not(.light), .btn-primary, .year-pill, .save-btn, .tool-btn.on { background:#205dc2; }
+    .round-btn:not(.light), .btn-primary, .save-btn, .tool-btn.on { background:#205dc2; }
     button:focus-visible { outline:3px solid #174cab; outline-offset:3px; }
     @media (prefers-reduced-motion:reduce) { .screen, .portada-btn { transition:none !important; } }
   `;
@@ -2027,8 +2051,10 @@ window.addEventListener('resize', () => {
     existingCalendar();
     document.querySelectorAll('#daysGrid .day-cell:not(:disabled)').forEach((cell, index) => {
       const events = (showEvents.checked && eventsByDay.get(curYear + '-' + curMonth + '-' + (index + 1))) || [];
+      if (events.some(event => event.birthday)) markBirthday(cell);
       for (const event of events.slice(0, 2)) {
         const tag = textElement('span', 'day-tag google-event', event.title);
+        if (event.birthday) tag.classList.add('birthday-event');
         tag.title = 'Google Calendar · ' + event.title;
         cell.append(tag);
       }
@@ -2043,7 +2069,7 @@ window.addEventListener('resize', () => {
     list.querySelector('.day-empty')?.remove();
     for (const event of events) {
       const row = textElement('div', 'day-item google-event', '');
-      row.append(textElement('span', 'time', event.time), textElement('span', 'label', event.title), textElement('span', 'google-label', 'Google Calendar'));
+      row.append(textElement('span', 'time', event.time), textElement('span', 'label', (event.birthday ? '👑 ' : '') + event.title), textElement('span', 'google-label', 'Google Calendar'));
       list.append(row);
     }
   };
@@ -2066,7 +2092,7 @@ window.addEventListener('resize', () => {
     while (+day < last) {
       const key = day.getFullYear() + '-' + day.getMonth() + '-' + day.getDate();
       const entries = index.get(key) ?? [];
-      entries.push({title:item.summary || 'Evento sin título', time:item.start.date ? 'Todo el día' : +day === +startDay ? dayFormat.format(start) : 'En curso'});
+      entries.push({title:item.summary || 'Evento sin título', birthday:item.eventType === 'birthday' || isBirthdayTitle(item.summary), time:item.start.date ? 'Todo el día' : +day === +startDay ? dayFormat.format(start) : 'En curso'});
       index.set(key, entries);
       day.setDate(day.getDate() + 1);
     }
@@ -2079,7 +2105,7 @@ window.addEventListener('resize', () => {
     requestedMonth = curYear + '-' + curMonth;
     const first = new Date(curYear, curMonth, 1);
     const after = new Date(curYear, curMonth + 1, 1);
-    const query = new URLSearchParams({timeMin:first.toISOString(), timeMax:after.toISOString(), singleEvents:'true', orderBy:'startTime', maxResults:'250', fields:'nextPageToken,items(summary,status,start,end)'});
+    const query = new URLSearchParams({timeMin:first.toISOString(), timeMax:after.toISOString(), singleEvents:'true', orderBy:'startTime', maxResults:'250', fields:'nextPageToken,items(summary,status,start,end,eventType)'});
     const index = new Map();
     status.textContent = 'Cargando eventos de Google Calendar…';
     try {
