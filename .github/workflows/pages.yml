@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'agenda-2026-2027/web/**'
+      - 'agenda/web/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -28,7 +28,7 @@ jobs:
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
-          path: agenda-2026-2027/web
+          path: agenda/web
       - name: Publicar web
         id: deployment
         uses: actions/deploy-pages@v4
