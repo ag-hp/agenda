@@ -440,7 +440,7 @@
   .books-header h1 { margin:0 0 14px; }
   .books-sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
   #bookSearch { display:flex; gap:8px; max-width:580px; }
-  #bookQuery, .book-review textarea {
+  #bookQuery, .book-review textarea, #bookLinkForm input {
     min-width:0; width:100%; padding:11px; color:#18283f; background:#fff; border:1px solid #bdcde4;
     border-radius:10px; font:inherit;
   }
@@ -487,6 +487,20 @@
     background:#edf4ff; color:#193e71; font-weight:700; cursor:pointer;
   }
   #bookFinder[open] #bookSearch { margin-top:12px; }
+  .book-source-links { display:flex; align-items:baseline; flex-wrap:wrap; gap:8px 16px; margin-top:10px; }
+  .book-source-links a, .book-original-link { color:#264d89; font-weight:700; }
+  #bookLinkEntry summary { font:inherit; font-weight:700; padding:4px 8px; }
+  #bookLinkForm { display:grid; gap:7px; margin:8px 0; max-width:420px; }
+  #bookLinkForm label { font-size:.9rem; font-weight:600; }
+  #bookLinkForm .books-action { justify-self:start; }
+  .book-removal { display:flex; align-items:center; flex-wrap:wrap; gap:9px; margin:8px 0; color:#334866; font-size:.9rem; }
+  .book-removal[hidden] { display:none; }
+  #undoBookRemove, .book-remove {
+    border:1px solid #bdcde4; background:#fff; padding:7px 11px; border-radius:8px; font:inherit; cursor:pointer;
+  }
+  #undoBookRemove { color:#264d89; font-weight:700; }
+  .book-remove { color:#9b2335; border-color:#e4b7c0; margin-top:12px; }
+  .book-original-link { display:inline-block; margin-top:10px; }
   #bookAddedStatus { color:#334866; font-size:.9rem; margin:8px 0; }
   #bookAddedStatus:empty { display:none; }
   #bookGallery {
@@ -647,6 +661,24 @@
             <input id="bookQuery" type="search" placeholder="Buscar por título o autor" maxlength="150" required>
             <button class="books-action" type="submit">Buscar</button>
           </form>
+          <div class="book-source-links">
+            <a id="bookWattpadSearch" href="https://www.wattpad.com/search" target="_blank" rel="noopener noreferrer">Buscar en Wattpad ↗</a>
+            <details id="bookLinkEntry">
+              <summary>Añadir por enlace</summary>
+              <form id="bookLinkForm">
+                <label for="bookOriginalUrl">Enlace de Wattpad u otra plataforma</label>
+                <input id="bookOriginalUrl" name="url" type="url" maxlength="1000" required>
+                <label for="bookExternalTitle">Título</label>
+                <input id="bookExternalTitle" name="title" maxlength="200" required>
+                <label for="bookExternalAuthor">Autor (opcional)</label>
+                <input id="bookExternalAuthor" name="author" maxlength="160">
+                <label for="bookExternalCover">Enlace de la portada (opcional)</label>
+                <input id="bookExternalCover" name="cover" type="url" maxlength="1000">
+                <button class="books-action" type="submit">Añadir a mis libros</button>
+                <p class="book-review-error" id="bookLinkStatus" role="status"></p>
+              </form>
+            </details>
+          </div>
           <p id="bookSearchStatus" role="status"></p>
           <div id="bookResults" aria-label="Resultados de libros"></div>
         </details>
@@ -657,6 +689,10 @@
           <span id="bookCount"></span>
         </div>
         <p id="bookAddedStatus" role="status"></p>
+        <div id="bookRemoval" class="book-removal" hidden>
+          <span id="bookRemovalStatus" role="status"></span>
+          <button id="undoBookRemove" type="button">Deshacer</button>
+        </div>
         <p id="bookSyncStatus" role="status"></p>
         <button class="books-action" id="retryBooksSave" type="button" hidden>Reintentar guardado</button>
         <div id="bookGallery"></div>
@@ -2394,6 +2430,14 @@ window.addEventListener('resize', () => {
 <script>
 (() => {
   const finder = document.getElementById('bookFinder');
+  const wattpadSearch = document.getElementById('bookWattpadSearch');
+  const linkEntry = document.getElementById('bookLinkEntry');
+  const linkForm = document.getElementById('bookLinkForm');
+  const linkStatus = document.getElementById('bookLinkStatus');
+  const removal = document.getElementById('bookRemoval');
+  const removalStatus = document.getElementById('bookRemovalStatus');
+  const undoRemove = document.getElementById('undoBookRemove');
+  let removedBook;
   const addedStatus = document.getElementById('bookAddedStatus');
   const search = document.getElementById('bookSearch');
   const query = document.getElementById('bookQuery');
@@ -2414,12 +2458,23 @@ window.addEventListener('resize', () => {
     return item;
   }
 
+  function httpsUrl(value) {
+    try {
+      const url = new URL(value);
+      return url.protocol === 'https:' && !url.username && !url.password ? url : null;
+    } catch { return null; }
+  }
+
   function coverImage(book) {
-    if (!Number.isSafeInteger(book.cover) || book.cover <= 0) return null;
+    const originalCover = httpsUrl(book.coverUrl);
+    const openLibraryCover = Number.isSafeInteger(book.cover) && book.cover > 0
+      ? 'https://covers.openlibrary.org/b/id/' + book.cover + '-M.jpg?default=false' : '';
+    if (!originalCover && !openLibraryCover) return null;
     const image = makeElement('img');
     image.alt = '';
     image.loading = 'lazy';
-    image.src = 'https://covers.openlibrary.org/b/id/' + book.cover + '-M.jpg?default=false';
+    image.referrerPolicy = 'no-referrer';
+    image.src = originalCover?.href ?? openLibraryCover;
     return image;
   }
 
@@ -2439,6 +2494,7 @@ window.addEventListener('resize', () => {
     if (isDetails) title.id = 'bookDetailsTitle';
     const meta = makeElement(isDetails ? 'div' : 'span', 'book-meta');
     meta.append(title, makeElement('small', '', book.author));
+    if (book.source) meta.append(makeElement('small', '', book.source));
     return [cover(book), meta];
   }
 
@@ -2496,9 +2552,7 @@ window.addEventListener('resize', () => {
           rating, comment: review
         };
         const next = previous ? libraryBooks.map(item => item.key === book.key ? saved : item) : [...libraryBooks, saved];
-        if (!storeData('books', next)) throw new Error('Cuenta no disponible');
-        libraryBooks = next;
-        renderGallery();
+        if (!saveCollection(next)) throw new Error('Cuenta no disponible');
         onSave(saved);
       } catch {
         error.textContent = 'No se pudo guardar el libro. Inténtalo de nuevo.';
@@ -2518,11 +2572,8 @@ window.addEventListener('resize', () => {
     function updateForm() {
       const previous = libraryBooks.find(item => item.key === book.key);
       const form = reviewForm(book, previous, saved => {
-        addedStatus.textContent = previous ? 'Valoración actualizada.' : saved.title + ' añadido a Mis libros.';
         if (finder.open && results.contains(card)) {
-          finder.open = false;
-          resetSearch();
-          focusBook(saved.key);
+          finishSearch(saved, previous ? 'Valoración actualizada.' : saved.title + ' añadido a Mis libros.');
         }
       });
       card.replaceChildren(toggle, form);
@@ -2539,13 +2590,76 @@ window.addEventListener('resize', () => {
     [...gallery.querySelectorAll('.book-gallery-card')].find(card => card.dataset.key === key)?.focus();
   }
 
+  function saveCollection(next) {
+    if (!storeData('books', next)) return false;
+    libraryBooks = next;
+    renderGallery();
+    return true;
+  }
+
+  function finishSearch(book, message) {
+    finder.open = false;
+    resetSearch();
+    addedStatus.textContent = message;
+    focusBook(book.key);
+  }
+
+  function removeBook(book, error) {
+    const index = libraryBooks.findIndex(item => item.key === book.key);
+    if (index < 0) return;
+    const next = libraryBooks.filter(item => item.key !== book.key);
+    if (!saveCollection(next)) {
+      error.textContent = 'No se pudo quitar el libro. Inténtalo de nuevo.';
+      return;
+    }
+    removedBook = { book, index };
+    removal.hidden = false;
+    removalStatus.textContent = book.title + ' se quitó de Mis libros.';
+    addedStatus.textContent = '';
+    details.close();
+    undoRemove.focus();
+  }
+
+  undoRemove.addEventListener('click', () => {
+    if (!removedBook) return;
+    const { book, index } = removedBook;
+    if (!libraryBooks.some(item => item.key === book.key)) {
+      const next = [...libraryBooks];
+      next.splice(index, 0, book);
+      if (!saveCollection(next)) {
+        removalStatus.textContent = 'No se pudo restaurar el libro. Inténtalo de nuevo.';
+        return;
+      }
+    }
+    removedBook = undefined;
+    removal.hidden = true;
+    removalStatus.textContent = '';
+    addedStatus.textContent = book.title + ' se restauró.';
+    focusBook(book.key);
+  });
+
   function showDetails(book) {
     const summary = makeElement('div', 'book-details-heading');
     summary.append(...heading(book, true));
-    detailsBody.replaceChildren(summary, reviewForm(book, book, saved => {
+    const review = reviewForm(book, book, saved => {
       details.close();
       focusBook(saved.key);
-    }));
+    });
+    detailsBody.replaceChildren(summary, review);
+    const original = httpsUrl(book.url);
+    if (original) {
+      const link = makeElement('a', 'book-original-link', 'Abrir en ' + (book.source || original.hostname));
+      link.href = original.href;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      detailsBody.append(link);
+    }
+    const remove = makeElement('button', 'book-remove', 'Quitar de Mis libros');
+    const error = makeElement('p', 'book-review-error');
+    error.setAttribute('role', 'status');
+    remove.type = 'button';
+    remove.addEventListener('click', () => removeBook(book, error));
+    detailsBody.append(remove, error);
     details.showModal();
   }
 
@@ -2582,6 +2696,10 @@ window.addEventListener('resize', () => {
     searchRequest?.abort();
     searchRequest = undefined;
     search.reset();
+    linkForm.reset();
+    linkEntry.open = false;
+    linkStatus.textContent = '';
+    wattpadSearch.href = 'https://www.wattpad.com/search';
     results.replaceChildren();
     searchStatus.textContent = '';
   }
@@ -2593,17 +2711,89 @@ window.addEventListener('resize', () => {
   window.loadBookGalleryForAccount = () => {
     finder.open = false;
     resetSearch();
-    addedStatus.textContent = syncStatus.textContent = '';
+    addedStatus.textContent = syncStatus.textContent = removalStatus.textContent = '';
+    removedBook = undefined;
+    removal.hidden = true;
     if (details.open) details.close();
     detailsBody.replaceChildren();
     renderGallery();
   };
+  function updateWattpadSearch() {
+    const term = query.value.trim();
+    wattpadSearch.href = 'https://www.wattpad.com/search' + (term ? '/' + encodeURIComponent(term) : '');
+  }
+
+  query.addEventListener('input', updateWattpadSearch);
+
+  linkForm.addEventListener('submit', event => {
+    event.preventDefault();
+    const input = new FormData(linkForm);
+    const original = httpsUrl(input.get('url'));
+    const coverText = String(input.get('cover')).trim();
+    const cover = coverText ? httpsUrl(coverText) : null;
+    const title = String(input.get('title')).trim();
+    if (!title || !original || (coverText && !cover)) {
+      linkStatus.textContent = 'Escribe un título y utiliza enlaces válidos que empiecen por https://.';
+      return;
+    }
+    const wattpad = /^(?:www\.)?wattpad\.com$/i.test(original.hostname);
+    const storyId = wattpad ? original.pathname.match(/^\/story\/(\d+)(?:[-/]|$)/)?.[1] : null;
+    original.hash = '';
+    if (storyId) original.search = '';
+    const key = storyId ? 'wattpad:' + storyId : 'url:' + original.href;
+    if (libraryBooks.some(book => book.key === key)) {
+      linkStatus.textContent = 'Este libro ya está en Mis libros.';
+      return;
+    }
+    const book = {
+      key, title, author: String(input.get('author')).trim() || 'Autor desconocido',
+      source: wattpad ? 'Wattpad' : original.hostname.replace(/^www\./, ''),
+      url: original.href, coverUrl: cover?.href, rating: null, comment: ''
+    };
+    if (!saveCollection([...libraryBooks, book])) {
+      linkStatus.textContent = 'No se pudo añadir el libro. Inténtalo de nuevo.';
+      return;
+    }
+    finishSearch(book, book.title + ' añadido a Mis libros.');
+  });
+
+  async function bookCatalog(url, signal) {
+    const response = await fetch(url, { signal });
+    if (!response.ok) throw new Error('Catálogo no disponible');
+    return response.json();
+  }
+
+  async function searchOpenLibrary(term, signal) {
+    const params = new URLSearchParams({ q: term, fields: 'key,title,author_name,cover_i', limit: '12' });
+    const data = await bookCatalog('https://openlibrary.org/search.json?' + params, signal);
+    return (data.docs ?? []).filter(item =>
+      typeof item.title === 'string' && /^(?:\/works\/)?OL\d+W$/.test(item.key)
+    ).map(item => {
+      const key = item.key.split('/').pop();
+      return { key, title: item.title, author: item.author_name?.slice(0, 3).join(', ') || 'Autor desconocido',
+        cover: item.cover_i, source: 'Open Library', url: 'https://openlibrary.org/works/' + key };
+    });
+  }
+
+  async function searchGutenberg(term, signal) {
+    const data = await bookCatalog('https://gutendex.com/books/?' + new URLSearchParams({ search: term }), signal);
+    return (data.results ?? []).slice(0, 6).filter(item =>
+      Number.isSafeInteger(item.id) && item.id > 0 && typeof item.title === 'string'
+    ).map(item => ({
+      key: 'gutenberg:' + item.id, title: item.title,
+      author: item.authors?.slice(0, 3).map(author => author.name).join(', ') || 'Autor desconocido',
+      coverUrl: item.formats?.['image/jpeg'], source: 'Project Gutenberg',
+      url: 'https://www.gutenberg.org/ebooks/' + item.id
+    }));
+  }
+
   search.addEventListener('submit', async event => {
     event.preventDefault();
     const term = query.value.trim();
     searchRequest?.abort();
     results.replaceChildren();
     addedStatus.textContent = '';
+    updateWattpadSearch();
     if (!term) {
       searchStatus.textContent = 'Escribe un título o un autor.';
       return;
@@ -2611,24 +2801,18 @@ window.addEventListener('resize', () => {
     const request = new AbortController();
     searchRequest = request;
     searchStatus.textContent = 'Buscando libros…';
-    const params = new URLSearchParams({ q: term, fields: 'key,title,author_name,cover_i', limit: '12' });
-    const timeout = setTimeout(() => request.abort('timeout'), 10000);
+    const timeout = setTimeout(() => request.abort('timeout'), 8500);
     try {
-      const response = await fetch('https://openlibrary.org/search.json?' + params, { signal: request.signal });
-      if (!response.ok) throw new Error('Catálogo no disponible');
-      const catalog = await response.json();
-      if (request.signal.aborted) return;
-      const books = (catalog.docs ?? []).filter(item => typeof item.title === 'string' && /^(?:\/works\/)?OL\d+W$/.test(item.key)).map(item => ({
-        key: item.key.split('/').pop(), title: item.title,
-        author: item.author_name?.slice(0, 3).join(', ') || 'Autor desconocido',
-        cover: item.cover_i
-      }));
+      const catalogs = await Promise.allSettled([
+        searchOpenLibrary(term, request.signal), searchGutenberg(term, request.signal)
+      ]);
+      if (searchRequest !== request || (request.signal.aborted && request.signal.reason !== 'timeout')) return;
+      const available = catalogs.filter(catalog => catalog.status === 'fulfilled');
+      const books = available.flatMap(catalog => catalog.value);
       results.append(...books.map(renderResult));
-      searchStatus.textContent = books.length ? '' : 'No se encontraron libros para esa búsqueda.';
-    } catch {
-      if (searchRequest === request && (!request.signal.aborted || request.signal.reason === 'timeout')) {
-        searchStatus.textContent = 'No se pudo consultar el catálogo. Inténtalo de nuevo.';
-      }
+      if (!available.length) searchStatus.textContent = 'No se pudo consultar el catálogo. Inténtalo de nuevo.';
+      else if (!books.length) searchStatus.textContent = 'No se encontraron libros en los catálogos disponibles.';
+      else searchStatus.textContent = '';
     } finally {
       clearTimeout(timeout);
     }
