@@ -2699,6 +2699,31 @@ window.addEventListener('resize', () => {
     detailsBody.replaceChildren();
     renderGallery();
   };
+  const verifiedBooks = [{
+    key: 'isbn:9786073902274', title: 'El perfume del rey', author: 'Karine Bernal Lobo',
+    source: 'Planeta', url: 'https://www.planetadelibros.com/libro-el-perfume-del-rey/379841?soporte=379841',
+    coverUrl: 'https://proassetspdlcom.cdnstatics2.com/usuaris/libros/thumbs/a38b167d-8cb8-4934-bcd4-3dcd49134202/d_295_510/portada_el-perfume-del-rey_karine-bernal-lobo_202310231126.webp'
+  }];
+
+  function normalizeBookText(value) {
+    return String(value).toLocaleLowerCase('es').normalize('NFD').replace(/\p{M}/gu, '')
+      .replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  }
+
+  function searchVerifiedBooks(term) {
+    const query = normalizeBookText(term);
+    if (query.length < 4) return [];
+    const words = query.split(' ');
+    return verifiedBooks.filter(book => {
+      const title = normalizeBookText(book.title);
+      const author = normalizeBookText(book.author);
+      const isbn = book.key.slice(5);
+      if (query.replace(/ /g, '') === isbn) return true;
+      const index = (title + ' ' + author).split(' ');
+      return words.every(word => index.some(token => token.startsWith(word)));
+    });
+  }
+
   async function bookCatalog(url, signal) {
     const response = await fetch(url, { signal });
     if (!response.ok) throw new Error('Catálogo no disponible');
@@ -2743,7 +2768,7 @@ window.addEventListener('resize', () => {
     state.request = request;
     moreObserver?.unobserve(more);
     more.hidden = true;
-    searchStatus.textContent = state.seen.size ? 'Cargando más libros…' : 'Buscando libros…';
+    searchStatus.textContent = state.catalogs.some(catalog => catalog.page > 1) ? 'Cargando más libros…' : 'Buscando libros…';
     const timeout = setTimeout(() => request.abort('timeout'), 8500);
     let failures = 0;
     try {
@@ -2786,6 +2811,10 @@ window.addEventListener('resize', () => {
       term, seen: new Set(),
       catalogs: [searchOpenLibrary, searchGutenberg].map(search => ({ search, page: 1, done: false }))
     };
+    for (const book of searchVerifiedBooks(term)) {
+      searchState.seen.add(book.key);
+      results.append(renderResult(book));
+    }
     void loadNextBooks(searchState);
   }
 
