@@ -440,7 +440,7 @@
   .books-header h1 { margin:0 0 14px; }
   .books-sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
   #bookSearch { display:flex; gap:8px; max-width:580px; }
-  #bookQuery, .book-review textarea, #bookLinkForm input {
+  #bookQuery, .book-review textarea {
     min-width:0; width:100%; padding:11px; color:#18283f; background:#fff; border:1px solid #bdcde4;
     border-radius:10px; font:inherit;
   }
@@ -487,12 +487,9 @@
     background:#edf4ff; color:#193e71; font-weight:700; cursor:pointer;
   }
   #bookFinder[open] #bookSearch { margin-top:12px; }
-  .book-source-links { display:flex; align-items:baseline; flex-wrap:wrap; gap:8px 16px; margin-top:10px; }
-  .book-source-links a, .book-original-link { color:#264d89; font-weight:700; }
-  #bookLinkEntry summary { font:inherit; font-weight:700; padding:4px 8px; }
-  #bookLinkForm { display:grid; gap:7px; margin:8px 0; max-width:420px; }
-  #bookLinkForm label { font-size:.9rem; font-weight:600; }
-  #bookLinkForm .books-action { justify-self:start; }
+  #bookMore { margin:0 0 12px; }
+  #bookMore[hidden] { display:none; }
+  .book-original-link { color:#264d89; font-weight:700; }
   .book-removal { display:flex; align-items:center; flex-wrap:wrap; gap:9px; margin:8px 0; color:#334866; font-size:.9rem; }
   .book-removal[hidden] { display:none; }
   #undoBookRemove, .book-remove {
@@ -661,26 +658,9 @@
             <input id="bookQuery" type="search" placeholder="Buscar por título o autor" maxlength="150" required>
             <button class="books-action" type="submit">Buscar</button>
           </form>
-          <div class="book-source-links">
-            <a id="bookWattpadSearch" href="https://www.wattpad.com/search" target="_blank" rel="noopener noreferrer">Buscar en Wattpad ↗</a>
-            <details id="bookLinkEntry">
-              <summary>Añadir por enlace</summary>
-              <form id="bookLinkForm">
-                <label for="bookOriginalUrl">Enlace de Wattpad u otra plataforma</label>
-                <input id="bookOriginalUrl" name="url" type="url" maxlength="1000" required>
-                <label for="bookExternalTitle">Título</label>
-                <input id="bookExternalTitle" name="title" maxlength="200" required>
-                <label for="bookExternalAuthor">Autor (opcional)</label>
-                <input id="bookExternalAuthor" name="author" maxlength="160">
-                <label for="bookExternalCover">Enlace de la portada (opcional)</label>
-                <input id="bookExternalCover" name="cover" type="url" maxlength="1000">
-                <button class="books-action" type="submit">Añadir a mis libros</button>
-                <p class="book-review-error" id="bookLinkStatus" role="status"></p>
-              </form>
-            </details>
-          </div>
           <p id="bookSearchStatus" role="status"></p>
           <div id="bookResults" aria-label="Resultados de libros"></div>
+          <button class="books-action" id="bookMore" type="button" hidden>Cargar más resultados</button>
         </details>
       </header>
       <section aria-labelledby="bookGalleryTitle">
@@ -2430,10 +2410,6 @@ window.addEventListener('resize', () => {
 <script>
 (() => {
   const finder = document.getElementById('bookFinder');
-  const wattpadSearch = document.getElementById('bookWattpadSearch');
-  const linkEntry = document.getElementById('bookLinkEntry');
-  const linkForm = document.getElementById('bookLinkForm');
-  const linkStatus = document.getElementById('bookLinkStatus');
   const removal = document.getElementById('bookRemoval');
   const removalStatus = document.getElementById('bookRemovalStatus');
   const undoRemove = document.getElementById('undoBookRemove');
@@ -2443,12 +2419,14 @@ window.addEventListener('resize', () => {
   const query = document.getElementById('bookQuery');
   const searchStatus = document.getElementById('bookSearchStatus');
   const results = document.getElementById('bookResults');
+  const more = document.getElementById('bookMore');
   const gallery = document.getElementById('bookGallery');
   const count = document.getElementById('bookCount');
   const syncStatus = document.getElementById('bookSyncStatus');
   const details = document.getElementById('bookDetails');
   const detailsBody = document.getElementById('bookDetailsBody');
-  let searchRequest;
+  let searchState;
+  let searchTimer;
   let formId = 0;
 
   function makeElement(tag, className, text) {
@@ -2692,16 +2670,19 @@ window.addEventListener('resize', () => {
     }
   }
 
-  function resetSearch() {
-    searchRequest?.abort();
-    searchRequest = undefined;
-    search.reset();
-    linkForm.reset();
-    linkEntry.open = false;
-    linkStatus.textContent = '';
-    wattpadSearch.href = 'https://www.wattpad.com/search';
+  function clearSearchResults() {
+    clearTimeout(searchTimer);
+    searchState?.request?.abort();
+    searchState = undefined;
+    moreObserver?.unobserve(more);
+    more.hidden = true;
     results.replaceChildren();
     searchStatus.textContent = '';
+  }
+
+  function resetSearch() {
+    clearSearchResults();
+    search.reset();
   }
 
   finder.addEventListener('toggle', () => {
@@ -2718,66 +2699,32 @@ window.addEventListener('resize', () => {
     detailsBody.replaceChildren();
     renderGallery();
   };
-  function updateWattpadSearch() {
-    const term = query.value.trim();
-    wattpadSearch.href = 'https://www.wattpad.com/search' + (term ? '/' + encodeURIComponent(term) : '');
-  }
-
-  query.addEventListener('input', updateWattpadSearch);
-
-  linkForm.addEventListener('submit', event => {
-    event.preventDefault();
-    const input = new FormData(linkForm);
-    const original = httpsUrl(input.get('url'));
-    const coverText = String(input.get('cover')).trim();
-    const cover = coverText ? httpsUrl(coverText) : null;
-    const title = String(input.get('title')).trim();
-    if (!title || !original || (coverText && !cover)) {
-      linkStatus.textContent = 'Escribe un título y utiliza enlaces válidos que empiecen por https://.';
-      return;
-    }
-    const wattpad = /^(?:www\.)?wattpad\.com$/i.test(original.hostname);
-    const storyId = wattpad ? original.pathname.match(/^\/story\/(\d+)(?:[-/]|$)/)?.[1] : null;
-    original.hash = '';
-    if (storyId) original.search = '';
-    const key = storyId ? 'wattpad:' + storyId : 'url:' + original.href;
-    if (libraryBooks.some(book => book.key === key)) {
-      linkStatus.textContent = 'Este libro ya está en Mis libros.';
-      return;
-    }
-    const book = {
-      key, title, author: String(input.get('author')).trim() || 'Autor desconocido',
-      source: wattpad ? 'Wattpad' : original.hostname.replace(/^www\./, ''),
-      url: original.href, coverUrl: cover?.href, rating: null, comment: ''
-    };
-    if (!saveCollection([...libraryBooks, book])) {
-      linkStatus.textContent = 'No se pudo añadir el libro. Inténtalo de nuevo.';
-      return;
-    }
-    finishSearch(book, book.title + ' añadido a Mis libros.');
-  });
-
   async function bookCatalog(url, signal) {
     const response = await fetch(url, { signal });
     if (!response.ok) throw new Error('Catálogo no disponible');
     return response.json();
   }
 
-  async function searchOpenLibrary(term, signal) {
-    const params = new URLSearchParams({ q: term, fields: 'key,title,author_name,cover_i', limit: '12' });
+  async function searchOpenLibrary(term, page, signal) {
+    const limit = 12;
+    const params = new URLSearchParams({ q: term, fields: 'key,title,author_name,cover_i', limit, page });
     const data = await bookCatalog('https://openlibrary.org/search.json?' + params, signal);
-    return (data.docs ?? []).filter(item =>
+    const docs = data.docs ?? [];
+    const books = docs.filter(item =>
       typeof item.title === 'string' && /^(?:\/works\/)?OL\d+W$/.test(item.key)
     ).map(item => {
       const key = item.key.split('/').pop();
       return { key, title: item.title, author: item.author_name?.slice(0, 3).join(', ') || 'Autor desconocido',
         cover: item.cover_i, source: 'Open Library', url: 'https://openlibrary.org/works/' + key };
     });
+    const count = Number(data.numFound ?? data.num_found);
+    return { books, hasNext: docs.length > 0 && (Number.isFinite(count) ? page * limit < count : docs.length === limit) };
   }
 
-  async function searchGutenberg(term, signal) {
-    const data = await bookCatalog('https://gutendex.com/books/?' + new URLSearchParams({ search: term }), signal);
-    return (data.results ?? []).slice(0, 6).filter(item =>
+  async function searchGutenberg(term, page, signal) {
+    const params = new URLSearchParams({ search: term, page });
+    const data = await bookCatalog('https://gutendex.com/books/?' + params, signal);
+    const books = (data.results ?? []).filter(item =>
       Number.isSafeInteger(item.id) && item.id > 0 && typeof item.title === 'string'
     ).map(item => ({
       key: 'gutenberg:' + item.id, title: item.title,
@@ -2785,37 +2732,76 @@ window.addEventListener('resize', () => {
       coverUrl: item.formats?.['image/jpeg'], source: 'Project Gutenberg',
       url: 'https://www.gutenberg.org/ebooks/' + item.id
     }));
+    return { books, hasNext: Boolean(data.next) };
   }
 
-  search.addEventListener('submit', async event => {
-    event.preventDefault();
-    const term = query.value.trim();
-    searchRequest?.abort();
-    results.replaceChildren();
-    addedStatus.textContent = '';
-    updateWattpadSearch();
-    if (!term) {
-      searchStatus.textContent = 'Escribe un título o un autor.';
-      return;
-    }
+  async function loadNextBooks(state) {
+    if (searchState !== state || state.request) return;
+    const catalogs = state.catalogs.filter(catalog => !catalog.done);
+    if (!catalogs.length) return;
     const request = new AbortController();
-    searchRequest = request;
-    searchStatus.textContent = 'Buscando libros…';
+    state.request = request;
+    moreObserver?.unobserve(more);
+    more.hidden = true;
+    searchStatus.textContent = state.seen.size ? 'Cargando más libros…' : 'Buscando libros…';
     const timeout = setTimeout(() => request.abort('timeout'), 8500);
+    let failures = 0;
     try {
-      const catalogs = await Promise.allSettled([
-        searchOpenLibrary(term, request.signal), searchGutenberg(term, request.signal)
-      ]);
-      if (searchRequest !== request || (request.signal.aborted && request.signal.reason !== 'timeout')) return;
-      const available = catalogs.filter(catalog => catalog.status === 'fulfilled');
-      const books = available.flatMap(catalog => catalog.value);
-      results.append(...books.map(renderResult));
-      if (!available.length) searchStatus.textContent = 'No se pudo consultar el catálogo. Inténtalo de nuevo.';
-      else if (!books.length) searchStatus.textContent = 'No se encontraron libros en los catálogos disponibles.';
+      await Promise.all(catalogs.map(async catalog => {
+        try {
+          const response = await catalog.search(state.term, catalog.page, request.signal);
+          if (searchState !== state || request.signal.aborted) return;
+          catalog.page++;
+          catalog.done = !response.hasNext;
+          for (const book of response.books) {
+            if (state.seen.has(book.key)) continue;
+            state.seen.add(book.key);
+            results.append(renderResult(book));
+          }
+        } catch {
+          failures++;
+        }
+      }));
+      if (searchState !== state) return;
+      const hasNext = state.catalogs.some(catalog => !catalog.done);
+      if (failures && !state.seen.size) searchStatus.textContent = 'Algún catálogo no respondió. Puedes volver a intentar la búsqueda.';
+      else if (failures) searchStatus.textContent = 'Algunos resultados no se pudieron cargar.';
+      else if (!state.seen.size) searchStatus.textContent = 'No se encontraron libros en los catálogos disponibles.';
       else searchStatus.textContent = '';
+      more.textContent = failures ? 'Reintentar catálogos' : 'Cargar más resultados';
+      more.hidden = !hasNext;
+      if (hasNext && !failures) moreObserver?.observe(more);
     } finally {
       clearTimeout(timeout);
+      state.request = undefined;
     }
+  }
+
+  function startSearch() {
+    clearSearchResults();
+    const term = query.value.trim();
+    if (!term) return;
+    addedStatus.textContent = '';
+    searchState = {
+      term, seen: new Set(),
+      catalogs: [searchOpenLibrary, searchGutenberg].map(search => ({ search, page: 1, done: false }))
+    };
+    void loadNextBooks(searchState);
+  }
+
+  const moreObserver = typeof IntersectionObserver === 'function' ? new IntersectionObserver(entries => {
+    if (searchState && entries.some(entry => entry.isIntersecting)) void loadNextBooks(searchState);
+  }, { root: finder.closest('.books-content'), rootMargin: '0px 0px 140px' }) : null;
+  more.addEventListener('click', () => {
+    if (searchState) void loadNextBooks(searchState);
+  });
+  query.addEventListener('input', () => {
+    clearSearchResults();
+    if (query.value.trim()) searchTimer = setTimeout(startSearch, 400);
+  });
+  search.addEventListener('submit', event => {
+    event.preventDefault();
+    startSearch();
   });
   renderGallery();
 })();
