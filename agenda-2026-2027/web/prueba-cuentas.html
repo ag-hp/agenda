@@ -162,11 +162,14 @@
   .day-cell:hover{ background:var(--bg-2); }
   .day-cell.outside .day-num{ color:#D2D6E0; }
   .day-num{
-    font-size:13px; font-weight:800; color:var(--ink); width:22px; height:22px;
+    font-size:18px; font-weight:800; color:var(--ink); width:min(28px, 100%); height:28px;
     display:flex; align-items:center; justify-content:center; border-radius:50%;
   }
-  .day-cell.today .day-num{ border:1.5px solid var(--blue); }
-  .day-cell.selected .day-num{ background:var(--blue); color:#fff; }
+  .day-cell.today{
+    background:var(--blue-tint);
+    box-shadow:inset 0 0 0 2px var(--blue);
+  }
+  .day-cell.selected:not(.today) .day-num{ background:var(--blue); color:#fff; }
   .day-tag{
     font-size:9px; font-weight:800; border-radius:6px; padding:2px 5px;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; line-height:1.4;
@@ -733,7 +736,10 @@ function renderCalendar(){
     div.className = 'day-cell' + (c.outside ? ' outside' : '');
     const key = curYear + '-' + curMonth + '-' + c.d;
     const isToday = !c.outside && curYear===today.getFullYear() && curMonth===today.getMonth() && c.d===today.getDate();
-    if(isToday) div.classList.add('today');
+    if(isToday){
+      div.classList.add('today');
+      div.setAttribute('aria-current', 'date');
+    }
     if(!c.outside && key === selectedKey) div.classList.add('selected');
 
     const num = document.createElement('div');
