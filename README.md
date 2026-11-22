@@ -2,7 +2,7 @@
 
 Agenda personal para organizar eventos y tareas, tomar notas y llevar un registro de tus lecturas.
 
-**[Abrir la agenda en GitHub Pages](https://ag-hp.github.io/agenda-2026-2027/prueba-cuentas.html)**
+**[Abrir la agenda en GitHub Pages](https://ag-hp.github.io/agenda/prueba-cuentas.html)**
 
 ## Qué puedes hacer
 
