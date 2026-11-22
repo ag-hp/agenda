@@ -17,10 +17,10 @@ En la agenda publicada puedes crear una cuenta o entrar con Google. Las notas, l
 Desde la raíz del repositorio, ejecuta:
 
 ```sh
-python3 -m http.server 8000 --directory agenda-2026-2027/web
+python3 -m http.server 8000 --directory agenda/web
 ```
 
-Abre [http://localhost:8000](http://localhost:8000) para probar la versión local, que usa el almacenamiento del navegador. El servidor de Python solo se usa para el desarrollo. Para alojar la agenda, puedes publicar la carpeta `agenda-2026-2027/web/` en un alojamiento estático con HTTPS.
+Abre [http://localhost:8000](http://localhost:8000) para probar la versión local, que usa el almacenamiento del navegador. El servidor de Python solo se usa para el desarrollo. Para alojar la agenda, puedes publicar la carpeta `agenda/web/` en un alojamiento estático con HTTPS.
 
 ## Instalar la versión local
 
@@ -30,7 +30,7 @@ Abre [http://localhost:8000](http://localhost:8000) para probar la versión loca
 
 ## Compilar para iOS
 
-En un Mac con Node.js 22 o posterior y Xcode 26 o posterior, abre la carpeta `agenda-2026-2027/` y ejecuta:
+En un Mac con Node.js 22 o posterior y Xcode 26 o posterior, abre la carpeta `agenda/` y ejecuta:
 
 ```sh
 npm install
