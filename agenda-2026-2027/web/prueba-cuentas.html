@@ -416,6 +416,17 @@
   .calendar-settings-option input { margin:0; width:20px; height:20px; accent-color:var(--blue); }
   #calendarSettings [hidden] { display:none; }
   .calendar-menu-button:disabled { opacity:.55; cursor:wait; }
+
+  .day-cell.diva-birthday {
+    background:#ffe5f1;
+    box-shadow:inset 0 0 0 2px #e44893, 0 0 10px #f37bbca6;
+  }
+  .diva-birthday-label {
+    white-space:normal; overflow-wrap:anywhere; color:#85234e; font-weight:800;
+  }
+  .day-cell .diva-birthday-label { font-size:10px; padding:0; }
+  #dayBirthdayLabel { display:inline-block; margin-top:4px; padding:4px 9px; border-radius:9px; font-size:13px; background:#ffe5f1; }
+  #dayBirthdayLabel[hidden] { display:none; }
 </style>
 </head>
 <body>
@@ -501,6 +512,7 @@
       <div>
         <div class="day-sub" id="daySub">Enero 2026</div>
         <div class="day-title" id="dayTitle">Jueves 8</div>
+        <span class="diva-birthday-label" id="dayBirthdayLabel" hidden></span>
       </div>
     </div>
     <div class="day-list" id="dayList"></div>
@@ -692,6 +704,11 @@ function updatePeriodSelectors(){
   yearSelect.value = String(curYear);
 }
 
+const divaBirthdayTitle = 'Cumpleaños de una diva';
+function isDivaBirthday(month, day){
+  return month === 6 && day === 24;
+}
+
 function isBirthdayTitle(title){
   return /\b(cumpleaños|cumple|birthday)\b/i.test(title ?? '');
 }
@@ -765,8 +782,16 @@ function renderCalendar(){
     num.textContent = c.d;
     div.appendChild(num);
 
-    if(!c.outside && ((curMonth === 6 && c.d === 24) || events[key]?.some(ev=>ev.birthday || isBirthdayTitle(ev.label)))){
+    const divaBirthday = !c.outside && isDivaBirthday(curMonth, c.d);
+    if(!c.outside && (divaBirthday || events[key]?.some(ev=>ev.birthday || isBirthdayTitle(ev.label)))){
       markBirthday(div);
+    }
+    if(divaBirthday){
+      div.classList.add('diva-birthday');
+      const label = document.createElement('span');
+      label.className = 'diva-birthday-label';
+      label.textContent = divaBirthdayTitle;
+      div.appendChild(label);
     }
     if(!c.outside && events[key]){
       events[key].slice(0,2).forEach(ev=>{
@@ -789,6 +814,9 @@ function openDay(y, m, d){
   const date = new Date(y,m,d);
   const wk = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'][date.getDay()];
   document.getElementById('dayTitle').textContent = wk.charAt(0).toUpperCase()+wk.slice(1) + ' ' + d;
+  const birthdayLabel = document.getElementById('dayBirthdayLabel');
+  birthdayLabel.hidden = !isDivaBirthday(m, d);
+  birthdayLabel.textContent = birthdayLabel.hidden ? '' : '👑 ' + divaBirthdayTitle;
   window._curDayKey = y+'-'+m+'-'+d;
   renderDayList();
   goTo('day');
