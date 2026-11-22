@@ -2018,6 +2018,20 @@ window.addEventListener('resize', () => {
 
   const navigate = goTo;
   goTo = name => { if (owner || name === 'acceso') navigate(name); };
+  window.searchBooksOnWeb = async (query, signal) => {
+    if (!owner || !client) return [];
+    const { data, error } = await client.auth.getSession();
+    if (error || !data.session || signal.aborted) return [];
+    const response = await fetch(accountUrl + '/functions/v1/books-web-search', {
+      method: 'POST', signal,
+      headers: { apikey: accountKey, Authorization: 'Bearer ' + data.session.access_token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query })
+    });
+    if (!response.ok) return [];
+    const result = await response.json();
+    return Array.isArray(result.books) ? result.books : [];
+  };
+
   function setData(data = {}) {
     events = data.events ?? {};
     notes = data.notes ?? [];
@@ -2673,6 +2687,7 @@ window.addEventListener('resize', () => {
   function clearSearchResults() {
     clearTimeout(searchTimer);
     searchState?.request?.abort();
+    searchState?.webRequest?.abort();
     searchState = undefined;
     moreObserver?.unobserve(more);
     more.hidden = true;
@@ -2760,6 +2775,49 @@ window.addEventListener('resize', () => {
     return { books, hasNext: Boolean(data.next) };
   }
 
+  async function searchWebIfNeeded(state) {
+    const term = normalizeBookText(state.term);
+    if (state.webStarted || state.match || term.length < 4 || !window.searchBooksOnWeb) return;
+    state.webStarted = true;
+    const request = new AbortController();
+    state.webRequest = request;
+    const timeout = setTimeout(() => request.abort(), 20000);
+    try {
+      const books = await window.searchBooksOnWeb(state.term, request.signal);
+      if (searchState !== state || request.signal.aborted) return;
+      for (const item of books.slice(0, 4)) {
+        const original = httpsUrl(item.url);
+        if (!original || typeof item.title !== 'string' || typeof item.author !== 'string') continue;
+        const key = 'web:' + original.href;
+        const signature = normalizeBookText(item.title + ' ' + item.author);
+        if (state.seen.has(key) || state.titles.has(signature)) continue;
+        state.seen.add(key);
+        state.titles.add(signature);
+        const book = {
+          key, title: item.title, author: item.author || 'Autor desconocido',
+          source: original.hostname.replace(/^www\./, ''), url: original.href, coverUrl: item.coverUrl
+        };
+        results.append(renderResult(book));
+        searchStatus.textContent = '';
+      }
+    } catch {
+      // The catalogue results remain usable if web search is unavailable.
+    } finally {
+      clearTimeout(timeout);
+      state.webRequest = undefined;
+    }
+  }
+
+  function addBookResult(book, state) {
+    if (state.seen.has(book.key)) return;
+    state.seen.add(book.key);
+    state.titles.add(normalizeBookText(book.title + ' ' + book.author));
+    const title = normalizeBookText(book.title);
+    const term = normalizeBookText(state.term);
+    state.match ||= title === term || title.startsWith(term + ' ');
+    results.append(renderResult(book));
+  }
+
   async function loadNextBooks(state) {
     if (searchState !== state || state.request) return;
     const catalogs = state.catalogs.filter(catalog => !catalog.done);
@@ -2778,11 +2836,7 @@ window.addEventListener('resize', () => {
           if (searchState !== state || request.signal.aborted) return;
           catalog.page++;
           catalog.done = !response.hasNext;
-          for (const book of response.books) {
-            if (state.seen.has(book.key)) continue;
-            state.seen.add(book.key);
-            results.append(renderResult(book));
-          }
+          for (const book of response.books) addBookResult(book, state);
         } catch {
           failures++;
         }
@@ -2796,6 +2850,7 @@ window.addEventListener('resize', () => {
       more.textContent = failures ? 'Reintentar catálogos' : 'Cargar más resultados';
       more.hidden = !hasNext;
       if (hasNext && !failures) moreObserver?.observe(more);
+      void searchWebIfNeeded(state);
     } finally {
       clearTimeout(timeout);
       state.request = undefined;
@@ -2808,13 +2863,10 @@ window.addEventListener('resize', () => {
     if (!term) return;
     addedStatus.textContent = '';
     searchState = {
-      term, seen: new Set(),
+      term, seen: new Set(), titles: new Set(), match: false,
       catalogs: [searchOpenLibrary, searchGutenberg].map(search => ({ search, page: 1, done: false }))
     };
-    for (const book of searchVerifiedBooks(term)) {
-      searchState.seen.add(book.key);
-      results.append(renderResult(book));
-    }
+    for (const book of searchVerifiedBooks(term)) addBookResult(book, searchState);
     void loadNextBooks(searchState);
   }
 
