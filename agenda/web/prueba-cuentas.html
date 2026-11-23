@@ -439,7 +439,8 @@
   .books-content { min-height:0; min-width:0; overflow:auto; padding:4px 4px 24px; }
   .books-header h1 { margin:0 0 14px; }
   .books-sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
-  #bookSearch { display:flex; gap:8px; max-width:580px; }
+  .books-search-tools { width:min(100%,690px); margin:18px auto 0; }
+  #bookSearch { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:8px; }
   #bookQuery, .book-review textarea {
     min-width:0; width:100%; padding:11px; color:#18283f; background:#fff; border:1px solid #bdcde4;
     border-radius:10px; font:inherit;
@@ -449,6 +450,24 @@
     font:inherit; font-weight:700; cursor:pointer; flex-shrink:0;
   }
   .books-action:disabled { opacity:.6; cursor:wait; }
+  .books-secondary {
+    padding:9px 13px; border:1px solid #bdcde4; border-radius:10px; background:#fff;
+    color:#264d89; font:inherit; font-weight:700; cursor:pointer;
+  }
+  .books-secondary[aria-pressed="true"], .books-secondary[aria-expanded="true"] {
+    background:#edf4ff; border-color:#87a4d0;
+  }
+  .books-search-actions { display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:10px; margin:12px 0; }
+  #bookActiveFilters { color:#475973; font-size:.9rem; }
+  #bookCategories { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0 14px; }
+  #bookDiscoveryTitle { font-size:1.2rem; margin:18px 0 0; }
+  #bookOptions { width:min(420px,calc(100% - 24px)); border:1px solid #bdcde4; border-radius:16px; color:#18283f; padding:20px; }
+  #bookOptions::backdrop { background:#17243c70; }
+  #bookOptions h2 { margin:0 0 14px; }
+  #bookFilters { display:grid; gap:12px; }
+  #bookFilters label { display:grid; gap:4px; font-weight:700; }
+  #bookFilters select { width:100%; min-height:42px; padding:8px; border:1px solid #bdcde4; border-radius:8px; background:white; color:inherit; font:inherit; }
+  .books-filter-actions { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; }
   #bookSearchStatus, #bookSyncStatus, .book-review-error { color:#475973; font-size:.9rem; margin:8px 0; }
   #bookSearchStatus:empty, #bookSyncStatus:empty, .book-review-error:empty { display:none; }
   #bookResults { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr)); gap:10px; align-items:start; }
@@ -465,6 +484,10 @@
     background:#e2ecfa; color:#2a4d7a; border-radius:4px; font-size:24px;
   }
   .book-cover img { width:100%; height:100%; object-fit:contain; min-height:0; }
+  #bookResults.is-library { grid-template-columns:repeat(auto-fill,minmax(min(100%,150px),1fr)); gap:14px; }
+  .is-library .book-result-toggle { flex-direction:column; }
+  .is-library .book-cover { flex:none; width:100%; height:auto; aspect-ratio:2 / 3; }
+  .is-library .book-meta { gap:2px; }
   .book-result .book-review { display:none; }
   .book-result.is-open .book-review, .book-result:focus-within .book-review { display:grid; }
   @media (hover:hover) { .book-result:hover .book-review { display:grid; } }
@@ -482,11 +505,6 @@
   .book-gallery-heading { display:flex; align-items:baseline; flex-wrap:wrap; gap:10px; margin:20px 0 8px; }
   .book-gallery-heading h2 { font-size:1.15rem; margin:0; }
   #bookCount { font-size:.9rem; color:#475973; }
-  #bookFinder summary {
-    display:list-item; width:fit-content; padding:10px 14px; border-radius:10px;
-    background:#edf4ff; color:#193e71; font-weight:700; cursor:pointer;
-  }
-  #bookFinder[open] #bookSearch { margin-top:12px; }
   #bookMore { margin:0 0 12px; }
   #bookMore[hidden] { display:none; }
   .book-original-link { color:#264d89; font-weight:700; }
@@ -543,6 +561,11 @@
     .books-entry { grid-column:1 / -1; }
     #screen-libros.active { grid-template-columns:48px minmax(0,1fr); gap:7px; }
     #screen-libros .calendar-menu-button { width:38px; height:38px; }
+  }
+  @media (max-width:430px) {
+    #bookSearch { grid-template-columns:minmax(0,1fr) auto; }
+    #bookSearch button[type="submit"] { grid-row:2; grid-column:1 / -1; }
+    #bookOptionsButton { grid-column:2; grid-row:1; padding-inline:9px; }
   }
 
 </style>
@@ -651,17 +674,25 @@
     <main class="books-content">
       <header class="books-header">
         <h1 id="booksTitle" tabindex="-1">Libros</h1>
-        <details id="bookFinder">
-          <summary>Buscar libros</summary>
+        <div class="books-search-tools">
           <form id="bookSearch" role="search">
             <label class="books-sr-only" for="bookQuery">Buscar por título o autor</label>
-            <input id="bookQuery" type="search" placeholder="Buscar por título o autor" maxlength="150" required>
+            <input id="bookQuery" type="search" placeholder="Buscar por título o autor" maxlength="150">
             <button class="books-action" type="submit">Buscar</button>
+            <button class="books-secondary" id="bookOptionsButton" type="button" aria-haspopup="dialog">Opciones</button>
           </form>
-          <p id="bookSearchStatus" role="status"></p>
-          <div id="bookResults" aria-label="Resultados de libros"></div>
-          <button class="books-action" id="bookMore" type="button" hidden>Cargar más resultados</button>
-        </details>
+          <div class="books-search-actions">
+            <button class="books-secondary" id="bookBrowse" type="button" aria-expanded="false" aria-controls="bookDiscovery bookResults">Explorar biblioteca</button>
+            <span id="bookActiveFilters" aria-live="polite"></span>
+          </div>
+        </div>
+        <section id="bookDiscovery" aria-labelledby="bookDiscoveryTitle" hidden>
+          <h2 id="bookDiscoveryTitle">Biblioteca</h2>
+          <div id="bookCategories" role="group" aria-label="Categorías de la biblioteca"></div>
+        </section>
+        <p id="bookSearchStatus" role="status"></p>
+        <div id="bookResults" aria-label="Resultados de libros"></div>
+        <button class="books-action" id="bookMore" type="button" hidden>Cargar más resultados</button>
       </header>
       <section aria-labelledby="bookGalleryTitle">
         <div class="book-gallery-heading">
@@ -678,6 +709,18 @@
         <div id="bookGallery"></div>
       </section>
     </main>
+    <dialog id="bookOptions" aria-labelledby="bookOptionsTitle">
+      <h2 id="bookOptionsTitle">Opciones de búsqueda</h2>
+      <form id="bookFilters">
+        <label>Categoría<select name="category"></select></label>
+        <label>Edad recomendada<select name="age"></select></label>
+        <div class="books-filter-actions">
+          <button class="books-secondary" id="bookClearFilters" type="button">Quitar filtros</button>
+          <button class="books-secondary" id="bookCancelFilters" type="button">Cancelar</button>
+          <button class="books-action" type="submit">Guardar opciones</button>
+        </div>
+      </form>
+    </dialog>
     <dialog id="bookDetails" aria-labelledby="bookDetailsTitle">
       <form method="dialog" class="books-dialog-close"><button type="submit" aria-label="Cerrar ficha">✕</button></form>
       <div id="bookDetailsBody"></div>
@@ -2036,7 +2079,7 @@ window.addEventListener('resize', () => {
     events = data.events ?? {};
     notes = data.notes ?? [];
     libraryBooks = Array.isArray(data.books) ? data.books : [];
-    window.loadBookGalleryForAccount?.();
+    window.loadBookGalleryForAccount?.(owner);
     noteIdCounter = notes.reduce((highest, note) => Math.max(highest, note.id), 0) + 1;
     currentNote = null;
     selectedKey = null;
@@ -2423,7 +2466,13 @@ window.addEventListener('resize', () => {
 
 <script>
 (() => {
-  const finder = document.getElementById('bookFinder');
+  const browse = document.getElementById('bookBrowse');
+  const discovery = document.getElementById('bookDiscovery');
+  const categories = document.getElementById('bookCategories');
+  const optionsButton = document.getElementById('bookOptionsButton');
+  const options = document.getElementById('bookOptions');
+  const filterForm = document.getElementById('bookFilters');
+  const activeFilters = document.getElementById('bookActiveFilters');
   const removal = document.getElementById('bookRemoval');
   const removalStatus = document.getElementById('bookRemovalStatus');
   const undoRemove = document.getElementById('undoBookRemove');
@@ -2442,6 +2491,46 @@ window.addEventListener('resize', () => {
   let searchState;
   let searchTimer;
   let formId = 0;
+  let preferenceKey;
+  let filters = { category: '', age: '' };
+
+  const bookCategories = {
+    manga: { label: 'Manga y anime', subjects: ['manga', 'Japanese comics', 'cómics japoneses'] },
+    fantasy: { label: 'Fantasía', subjects: ['fantasy fiction', 'fantasy', 'fantasía'] },
+    romance: { label: 'Romance', subjects: ['romance fiction', 'love stories', 'novelas románticas'] },
+    mystery: { label: 'Misterio', subjects: ['mystery fiction', 'detective and mystery stories', 'novelas de misterio'] },
+    scifi: { label: 'Ciencia ficción', subjects: ['science fiction', 'ciencia ficción'] },
+    adventure: { label: 'Aventura', subjects: ['adventure fiction', 'adventure stories', 'novelas de aventuras'] },
+    classics: { label: 'Clásicos', subjects: ['classics', 'classic literature', 'clásicos de la literatura'] },
+    nonfiction: { label: 'No ficción', subjects: ['nonfiction', 'biography', 'no ficción', 'biografías'] }
+  };
+  const bookAges = {
+    children: { label: 'Infantil', subjects: ["children's fiction", "children's literature", 'picture books', 'literatura infantil'] },
+    teen: { label: 'Juvenil', subjects: ['young adult fiction', 'young adult literature', 'young adult graphic novels', 'literatura juvenil'] },
+    adult: { label: 'Adultos', subjects: ['adult fiction', 'adult literature', 'literatura para adultos'] }
+  };
+
+  function validatedFilters(value) {
+    return {
+      category: Object.hasOwn(bookCategories, value?.category) ? value.category : '',
+      age: Object.hasOwn(bookAges, value?.age) ? value.age : ''
+    };
+  }
+
+  function showActiveFilters() {
+    activeFilters.textContent = [bookCategories[filters.category]?.label, bookAges[filters.age]?.label]
+      .filter(Boolean).join(' · ');
+    for (const button of categories.querySelectorAll('button')) {
+      button.setAttribute('aria-pressed', String(button.dataset.category === filters.category));
+    }
+  }
+
+  function setBrowseMode(open) {
+    discovery.hidden = !open;
+    browse.setAttribute('aria-expanded', String(open));
+    browse.textContent = open ? 'Cerrar biblioteca' : 'Explorar biblioteca';
+    results.classList.toggle('is-library', open);
+  }
 
   function makeElement(tag, className, text) {
     const item = document.createElement(tag);
@@ -2459,8 +2548,12 @@ window.addEventListener('resize', () => {
 
   function coverImage(book) {
     const originalCover = httpsUrl(book.coverUrl);
-    const openLibraryCover = Number.isSafeInteger(book.cover) && book.cover > 0
-      ? 'https://covers.openlibrary.org/b/id/' + book.cover + '-M.jpg?default=false' : '';
+    let openLibraryCover;
+    if (Number.isSafeInteger(book.cover) && book.cover > 0) {
+      openLibraryCover = 'https://covers.openlibrary.org/b/id/' + book.cover + '-M.jpg?default=false';
+    } else if (/^\d{13}$/.test(book.isbn)) {
+      openLibraryCover = 'https://covers.openlibrary.org/b/isbn/' + book.isbn + '-M.jpg?default=false';
+    }
     if (!originalCover && !openLibraryCover) return null;
     const image = makeElement('img');
     image.alt = '';
@@ -2564,7 +2657,7 @@ window.addEventListener('resize', () => {
     function updateForm() {
       const previous = libraryBooks.find(item => item.key === book.key);
       const form = reviewForm(book, previous, saved => {
-        if (finder.open && results.contains(card)) {
+        if (results.contains(card)) {
           finishSearch(saved, previous ? 'Valoración actualizada.' : saved.title + ' añadido a Mis libros.');
         }
       });
@@ -2590,7 +2683,6 @@ window.addEventListener('resize', () => {
   }
 
   function finishSearch(book, message) {
-    finder.open = false;
     resetSearch();
     addedStatus.textContent = message;
     focusBook(book.key);
@@ -2697,39 +2789,102 @@ window.addEventListener('resize', () => {
 
   function resetSearch() {
     clearSearchResults();
+    setBrowseMode(false);
     search.reset();
   }
 
-  finder.addEventListener('toggle', () => {
-    if (!finder.open) resetSearch();
-  });
-
-  window.loadBookGalleryForAccount = () => {
-    finder.open = false;
+  window.loadBookGalleryForAccount = owner => {
+    preferenceKey = owner ? 'bookSearchFilters.' + owner : undefined;
+    filters = validatedFilters(preferenceKey ? loadData(preferenceKey, {}) : {});
+    showActiveFilters();
     resetSearch();
     addedStatus.textContent = syncStatus.textContent = removalStatus.textContent = '';
     removedBook = undefined;
     removal.hidden = true;
+    if (options.open) options.close();
     if (details.open) details.close();
     detailsBody.replaceChildren();
     renderGallery();
   };
   const verifiedBooks = [{
     key: 'isbn:9786073902274', title: 'El perfume del rey', author: 'Karine Bernal Lobo',
+    categories: ['fantasy', 'romance'], age: 'teen',
     source: 'Planeta', url: 'https://www.planetadelibros.com/libro-el-perfume-del-rey/379841?soporte=379841',
     coverUrl: 'https://proassetspdlcom.cdnstatics2.com/usuaris/libros/thumbs/a38b167d-8cb8-4934-bcd4-3dcd49134202/d_295_510/portada_el-perfume-del-rey_karine-bernal-lobo_202310231126.webp'
   }];
+
+  const featuredBooks = [
+    ['9781421530543', 'Pokémon Adventures, vol. 1', 'Hidenori Kusaka', 'children', ['manga', 'adventure']],
+    ['9781421575414', 'The Legend of Zelda: A Link to the Past', 'Shotaro Ishinomori', 'children', ['manga', 'fantasy', 'adventure']],
+    ['9781569319017', 'One Piece, vol. 1', 'Eiichiro Oda', 'teen', ['manga', 'fantasy', 'adventure']],
+    ['9781569319000', 'Naruto, vol. 1', 'Masashi Kishimoto', 'teen', ['manga', 'fantasy', 'adventure']],
+    ['9781421597126', 'Demon Slayer: Kimetsu no Yaiba, vol. 1', 'Koyoharu Gotouge', 'teen', ['manga', 'fantasy']],
+    ['9781421587660', 'Haikyu!!, vol. 1', 'Haruichi Furudate', 'teen', ['manga']],
+    ['9781974715466', 'Spy × Family, vol. 1', 'Tatsuya Endo', 'teen', ['manga', 'adventure']],
+    ['9781421569062', 'Monster: The Perfect Edition, vol. 1', 'Naoki Urasawa', 'adult', ['manga', 'mystery']],
+    ['9781612620244', 'Attack on Titan, vol. 1', 'Hajime Isayama', 'adult', ['manga', 'fantasy']],
+    ['9780439708180', 'Harry Potter and the Sorcerer’s Stone', 'J. K. Rowling', 'children', ['fantasy', 'adventure']],
+    ['9780786838653', 'The Lightning Thief', 'Rick Riordan', 'children', ['fantasy', 'adventure']],
+    ['9780064404990', 'The Lion, the Witch and the Wardrobe', 'C. S. Lewis', 'children', ['fantasy', 'classics']],
+    ['9780142410318', 'Matilda', 'Roald Dahl', 'children', ['fantasy', 'classics']],
+    ['9780064400558', 'Charlotte’s Web', 'E. B. White', 'children', ['classics']],
+    ['9780440414803', 'Holes', 'Louis Sachar', 'children', ['mystery', 'adventure']],
+    ['9780316058438', 'The Mysterious Benedict Society', 'Trenton Lee Stewart', 'children', ['mystery', 'adventure']],
+    ['9780312367558', 'A Wrinkle in Time', 'Madeleine L’Engle', 'children', ['scifi', 'adventure']],
+    ['9780241558355', 'Fantastic Mr Fox', 'Roald Dahl', 'children', ['adventure', 'classics']],
+    ['9788432214233', 'Manolito Gafotas', 'Elvira Lindo', 'children', ['classics']],
+    ['9788467502695', 'Memorias de Idhún I. La Resistencia', 'Laura Gallego', 'teen', ['fantasy', 'adventure']],
+    ['9786125027306', 'El príncipe de la niebla', 'Carlos Ruiz Zafón', 'teen', ['fantasy', 'mystery']],
+    ['9781250027436', 'Shadow and Bone', 'Leigh Bardugo', 'teen', ['fantasy', 'adventure']],
+    ['9781250076960', 'Six of Crows', 'Leigh Bardugo', 'teen', ['fantasy', 'adventure']],
+    ['9780316310277', 'The Cruel Prince', 'Holly Black', 'teen', ['fantasy', 'romance']],
+    ['9780439023481', 'The Hunger Games', 'Suzanne Collins', 'teen', ['scifi', 'adventure']],
+    ['9780062024039', 'Divergent', 'Veronica Roth', 'teen', ['scifi', 'adventure']],
+    ['9780142424179', 'The Fault in Our Stars', 'John Green', 'teen', ['romance']],
+    ['9781442426719', 'To All the Boys I’ve Loved Before', 'Jenny Han', 'teen', ['romance']],
+    ['9781524714680', 'One of Us Is Lying', 'Karen M. McManus', 'teen', ['mystery']],
+    ['9781984896391', 'A Good Girl’s Guide to Murder', 'Holly Jackson', 'teen', ['mystery']],
+    ['9780375842207', 'The Book Thief', 'Markus Zusak', 'teen', ['adventure']],
+    ['9780547928227', 'The Hobbit', 'J. R. R. Tolkien', 'teen', ['fantasy', 'adventure', 'classics']],
+    ['9780316229296', 'The Fifth Season', 'N. K. Jemisin', 'adult', ['fantasy']],
+    ['9780765326355', 'The Way of Kings', 'Brandon Sanderson', 'adult', ['fantasy', 'adventure']],
+    ['9780593441275', 'Book Lovers', 'Emily Henry', 'adult', ['romance']],
+    ['9781984806758', 'Beach Read', 'Emily Henry', 'adult', ['romance']],
+    ['9780141439518', 'Pride and Prejudice', 'Jane Austen', 'adult', ['romance', 'classics']],
+    ['9780062073501', 'And Then There Were None', 'Agatha Christie', 'adult', ['mystery', 'classics']],
+    ['9780062073495', 'Murder on the Orient Express', 'Agatha Christie', 'adult', ['mystery', 'classics']],
+    ['9780441172719', 'Dune', 'Frank Herbert', 'adult', ['scifi', 'adventure', 'classics']],
+    ['9780553293357', 'Foundation', 'Isaac Asimov', 'adult', ['scifi', 'classics']],
+    ['9780593135204', 'Project Hail Mary', 'Andy Weir', 'adult', ['scifi', 'adventure']],
+    ['9780553380163', 'A Brief History of Time', 'Stephen Hawking', 'adult', ['nonfiction']],
+    ['9780812984965', 'The Diary of a Young Girl', 'Anne Frank', 'teen', ['nonfiction', 'classics']],
+    ['9780399590504', 'Educated', 'Tara Westover', 'adult', ['nonfiction']],
+    ['9780735211292', 'Atomic Habits', 'James Clear', 'adult', ['nonfiction']],
+    ['9780385545969', 'The Wager', 'David Grann', 'adult', ['nonfiction', 'adventure']]
+  ].map(([isbn, title, author, age, categories]) => ({
+    key: 'isbn:' + isbn, isbn, title, author, age, categories,
+    url: 'https://openlibrary.org/isbn/' + isbn
+  }));
 
   function normalizeBookText(value) {
     return String(value).toLocaleLowerCase('es').normalize('NFD').replace(/\p{M}/gu, '')
       .replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
   }
 
-  function searchVerifiedBooks(term) {
+  function matchesBookFilters(book, selected) {
+    return (!selected.category || book.categories?.includes(selected.category)) &&
+      (!selected.age || book.age === selected.age);
+  }
+
+  function searchFeaturedBooks(term, selected, browsing) {
     const query = normalizeBookText(term);
-    if (query.length < 4) return [];
+    const hasFilters = Boolean(selected.category || selected.age);
+    if (!browsing && query.length < (hasFilters ? 1 : 4)) return [];
     const words = query.split(' ');
-    return verifiedBooks.filter(book => {
+    const books = browsing || hasFilters ? [...verifiedBooks, ...featuredBooks] : verifiedBooks;
+    return books.filter(book => {
+      if (!matchesBookFilters(book, selected)) return false;
+      if (browsing) return true;
       const title = normalizeBookText(book.title);
       const author = normalizeBookText(book.author);
       const isbn = book.key.slice(5);
@@ -2745,14 +2900,33 @@ window.addEventListener('resize', () => {
     return response.json();
   }
 
-  async function searchOpenLibrary(term, page, signal) {
+  function subjectQuery(subjects) {
+    return '(' + subjects.map(subject => 'subject:' + JSON.stringify(subject)).join(' OR ') + ')';
+  }
+
+  function matchesSubjects(subjects, candidates) {
+    return candidates.some(candidate => subjects.has(normalizeBookText(candidate)));
+  }
+
+  async function searchOpenLibrary(term, page, signal, selected) {
     const limit = 12;
-    const params = new URLSearchParams({ q: term, fields: 'key,title,author_name,cover_i', limit, page });
+    const category = bookCategories[selected.category];
+    const age = bookAges[selected.age];
+    const clauses = [term, category && subjectQuery(category.subjects), age && subjectQuery(age.subjects)].filter(Boolean);
+    if (clauses.length > 1 && term) clauses[0] = '(' + term + ')';
+    const fields = category || age ? 'key,title,author_name,cover_i,subject' : 'key,title,author_name,cover_i';
+    const params = new URLSearchParams({ q: clauses.join(' AND '), fields, limit, page });
     const data = await bookCatalog('https://openlibrary.org/search.json?' + params, signal);
     const docs = data.docs ?? [];
-    const books = docs.filter(item =>
-      typeof item.title === 'string' && /^(?:\/works\/)?OL\d+W$/.test(item.key)
-    ).map(item => {
+    const books = docs.filter(item => {
+      if (typeof item.title !== 'string' || !/^(?:\/works\/)?OL\d+W$/.test(item.key)) return false;
+      if (!category && !age) return true;
+      const subjects = new Set((item.subject ?? []).map(normalizeBookText));
+      if (category && !matchesSubjects(subjects, category.subjects)) return false;
+      if (!age) return true;
+      const audiences = Object.entries(bookAges).filter(([, group]) => matchesSubjects(subjects, group.subjects));
+      return audiences.length === 1 && audiences[0][0] === selected.age;
+    }).map(item => {
       const key = item.key.split('/').pop();
       return { key, title: item.title, author: item.author_name?.slice(0, 3).join(', ') || 'Autor desconocido',
         cover: item.cover_i, source: 'Open Library', url: 'https://openlibrary.org/works/' + key };
@@ -2777,7 +2951,7 @@ window.addEventListener('resize', () => {
 
   async function searchWebIfNeeded(state) {
     const term = normalizeBookText(state.term);
-    if (state.webStarted || state.match || term.length < 4 || !window.searchBooksOnWeb) return;
+    if (state.filtered || state.webStarted || state.match || term.length < 4 || !window.searchBooksOnWeb) return;
     state.webStarted = true;
     const request = new AbortController();
     state.webRequest = request;
@@ -2809,9 +2983,10 @@ window.addEventListener('resize', () => {
   }
 
   function addBookResult(book, state) {
-    if (state.seen.has(book.key)) return;
+    const signature = normalizeBookText(book.title + ' ' + book.author);
+    if (state.seen.has(book.key) || (state.filtered && state.titles.has(signature))) return;
     state.seen.add(book.key);
-    state.titles.add(normalizeBookText(book.title + ' ' + book.author));
+    state.titles.add(signature);
     const title = normalizeBookText(book.title);
     const term = normalizeBookText(state.term);
     state.match ||= title === term || title.startsWith(term + ' ');
@@ -2832,7 +3007,7 @@ window.addEventListener('resize', () => {
     try {
       await Promise.all(catalogs.map(async catalog => {
         try {
-          const response = await catalog.search(state.term, catalog.page, request.signal);
+          const response = await catalog.search(state.term, catalog.page, request.signal, state.filters);
           if (searchState !== state || request.signal.aborted) return;
           catalog.page++;
           catalog.done = !response.hasNext;
@@ -2845,11 +3020,12 @@ window.addEventListener('resize', () => {
       const hasNext = state.catalogs.some(catalog => !catalog.done);
       if (failures && !state.seen.size) searchStatus.textContent = 'Algún catálogo no respondió. Puedes volver a intentar la búsqueda.';
       else if (failures) searchStatus.textContent = 'Algunos resultados no se pudieron cargar.';
-      else if (!state.seen.size) searchStatus.textContent = 'No se encontraron libros en los catálogos disponibles.';
+      else if (!state.seen.size) searchStatus.textContent = state.filtered
+        ? 'No se encontraron libros con estas opciones.' : 'No se encontraron libros en los catálogos disponibles.';
       else searchStatus.textContent = '';
       more.textContent = failures ? 'Reintentar catálogos' : 'Cargar más resultados';
       more.hidden = !hasNext;
-      if (hasNext && !failures) moreObserver?.observe(more);
+      if (hasNext && !failures && !state.filtered) moreObserver?.observe(more);
       void searchWebIfNeeded(state);
     } finally {
       clearTimeout(timeout);
@@ -2857,32 +3033,91 @@ window.addEventListener('resize', () => {
     }
   }
 
-  function startSearch() {
+  function startSearch(browsing = false) {
     clearSearchResults();
-    const term = query.value.trim();
-    if (!term) return;
+    setBrowseMode(browsing);
+    const term = browsing ? '' : query.value.trim();
+    if (!term && !browsing) return;
     addedStatus.textContent = '';
+    const filtered = Boolean(filters.category || filters.age);
+    const providers = filtered ? [searchOpenLibrary] : browsing ? [] : [searchOpenLibrary, searchGutenberg];
     searchState = {
-      term, seen: new Set(), titles: new Set(), match: false,
-      catalogs: [searchOpenLibrary, searchGutenberg].map(search => ({ search, page: 1, done: false }))
+      term, filters, filtered, seen: new Set(), titles: new Set(), match: false,
+      catalogs: providers.map(search => ({ search, page: 1, done: false }))
     };
-    for (const book of searchVerifiedBooks(term)) addBookResult(book, searchState);
+    for (const book of searchFeaturedBooks(term, filters, browsing)) addBookResult(book, searchState);
     void loadNextBooks(searchState);
   }
 
   const moreObserver = typeof IntersectionObserver === 'function' ? new IntersectionObserver(entries => {
     if (searchState && entries.some(entry => entry.isIntersecting)) void loadNextBooks(searchState);
-  }, { root: finder.closest('.books-content'), rootMargin: '0px 0px 140px' }) : null;
+  }, { root: search.closest('.books-content'), rootMargin: '0px 0px 140px' }) : null;
   more.addEventListener('click', () => {
     if (searchState) void loadNextBooks(searchState);
   });
   query.addEventListener('input', () => {
     clearSearchResults();
-    if (query.value.trim()) searchTimer = setTimeout(startSearch, 400);
+    if (query.value.trim()) {
+      setBrowseMode(false);
+      searchTimer = setTimeout(startSearch, 400);
+    }
   });
   search.addEventListener('submit', event => {
     event.preventDefault();
-    startSearch();
+    startSearch(!query.value.trim());
+  });
+
+  function applyFilters(next) {
+    filters = validatedFilters(next);
+    showActiveFilters();
+    let saved = false;
+    try {
+      if (preferenceKey) {
+        localStorage.setItem('agenda.' + preferenceKey, JSON.stringify(filters));
+        saved = true;
+      }
+    } catch {
+      // Active filters still apply for this session.
+    }
+    if (options.open) options.close();
+    startSearch(!query.value.trim() || !discovery.hidden);
+    if (!saved) activeFilters.textContent += (activeFilters.textContent ? ' · ' : '') + 'Opciones activas solo en esta sesión';
+  }
+
+  function addFilterOptions(select, values, all) {
+    select.add(new Option(all, ''));
+    for (const [value, entry] of Object.entries(values)) select.add(new Option(entry.label, value));
+  }
+
+  addFilterOptions(filterForm.elements.category, bookCategories, 'Todas las categorías');
+  addFilterOptions(filterForm.elements.age, bookAges, 'Todas las edades');
+  for (const option of filterForm.elements.category.options) {
+    const button = makeElement('button', 'books-secondary', option.value ? option.label : 'Todas');
+    button.type = 'button';
+    button.dataset.category = option.value;
+    button.addEventListener('click', () => applyFilters({ ...filters, category: option.value }));
+    categories.append(button);
+  }
+  showActiveFilters();
+
+  browse.addEventListener('click', () => {
+    if (discovery.hidden) {
+      query.value = '';
+      startSearch(true);
+    } else {
+      resetSearch();
+    }
+  });
+  optionsButton.addEventListener('click', () => {
+    filterForm.elements.category.value = filters.category;
+    filterForm.elements.age.value = filters.age;
+    options.showModal();
+  });
+  document.getElementById('bookCancelFilters').addEventListener('click', () => options.close());
+  document.getElementById('bookClearFilters').addEventListener('click', () => applyFilters({}));
+  filterForm.addEventListener('submit', event => {
+    event.preventDefault();
+    applyFilters({ category: filterForm.elements.category.value, age: filterForm.elements.age.value });
   });
   renderGallery();
 })();
