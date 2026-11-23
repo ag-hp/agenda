@@ -6,9 +6,9 @@ Agenda personal con calendario, tareas, eventos y un editor de notas con dibujo,
 
 Para probarla en el ordenador, ejecuta `python3 -m http.server 8000 --directory web` y abre [http://localhost:8000](http://localhost:8000).
 
-Para publicarla gratis con HTTPS desde un repositorio público de GitHub, selecciona «GitHub Actions» en «Settings → Pages → Build and deployment → Source». El flujo «Publicar Agenda en GitHub Pages» publica el contenido de `web/` al cambiar esa carpeta en `main`. También puedes iniciar el primer despliegue desde la pestaña «Actions». La agenda del repositorio `ag-hp/agenda` está en [GitHub Pages](https://ag-hp.github.io/agenda/prueba-cuentas.html).
+Para publicarla gratis con HTTPS desde un repositorio público de GitHub, selecciona «GitHub Actions» en «Settings → Pages → Build and deployment → Source». El flujo «Publicar Agenda en GitHub Pages» prepara la portada con cuentas a partir de `web/`. También puedes iniciar el despliegue desde la pestaña «Actions». La agenda del repositorio `ag-hp/agenda` está en [GitHub Pages](https://ag-hp.github.io/agenda/).
 
-Después de la primera visita con conexión, la agenda puede abrirse sin conexión. Las fuentes externas pueden usar sus alternativas del sistema.
+La [versión local en GitHub Pages](https://ag-hp.github.io/agenda/local.html) permite abrir los datos guardados en el navegador. La versión con cuenta requiere conexión para iniciar sesión y sincronizar cambios.
 
 También se puede instalar como aplicación web desde un navegador de escritorio compatible o desde Safari en iPhone y iPad con «Compartir → Añadir a pantalla de inicio».
 
