@@ -467,7 +467,10 @@
   #bookFilters { display:grid; gap:12px; }
   #bookFilters label { display:grid; gap:4px; font-weight:700; }
   #bookFilters select { width:100%; min-height:42px; padding:8px; border:1px solid #bdcde4; border-radius:8px; background:white; color:inherit; font:inherit; }
-  .books-filter-actions { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; }
+  .books-dialog-actions { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(0,1fr); gap:8px; }
+  .books-dialog-actions button {
+    width:100%; min-width:0; min-height:44px; padding:8px 6px; line-height:1.2; overflow-wrap:anywhere;
+  }
   #bookSearchStatus, #bookSyncStatus, .book-review-error { color:#475973; font-size:.9rem; margin:8px 0; }
   #bookSearchStatus:empty, #bookSyncStatus:empty, .book-review-error:empty { display:none; }
   #bookResults { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr)); gap:10px; align-items:start; }
@@ -507,15 +510,13 @@
   #bookCount { font-size:.9rem; color:#475973; }
   #bookMore { margin:0 0 12px; }
   #bookMore[hidden] { display:none; }
-  .book-original-link { color:#264d89; font-weight:700; }
   .book-removal { display:flex; align-items:center; flex-wrap:wrap; gap:9px; margin:8px 0; color:#334866; font-size:.9rem; }
   .book-removal[hidden] { display:none; }
-  #undoBookRemove, .book-remove {
+  #undoBookRemove {
     border:1px solid #bdcde4; background:#fff; padding:7px 11px; border-radius:8px; font:inherit; cursor:pointer;
+    color:#264d89; font-weight:700;
   }
-  #undoBookRemove { color:#264d89; font-weight:700; }
-  .book-remove { color:#9b2335; border-color:#e4b7c0; margin-top:12px; }
-  .book-original-link { display:inline-block; margin-top:10px; }
+  .book-remove { color:#9b2335; border-color:#e4b7c0; }
   #bookAddedStatus { color:#334866; font-size:.9rem; margin:8px 0; }
   #bookAddedStatus:empty { display:none; }
   #bookGallery {
@@ -714,7 +715,7 @@
       <form id="bookFilters">
         <label>Categoría<select name="category"></select></label>
         <label>Edad recomendada<select name="age"></select></label>
-        <div class="books-filter-actions">
+        <div class="books-dialog-actions">
           <button class="books-secondary" id="bookClearFilters" type="button">Quitar filtros</button>
           <button class="books-secondary" id="bookCancelFilters" type="button">Cancelar</button>
           <button class="books-action" type="submit">Guardar opciones</button>
@@ -2583,7 +2584,7 @@ window.addEventListener('resize', () => {
     return [cover(book), meta];
   }
 
-  function reviewForm(book, existing, onSave) {
+  function reviewForm(book, existing, onSave, allowRemoval = false) {
     const id = 'book-review-' + (++formId);
     const form = makeElement('form', 'book-review');
     const fieldset = makeElement('fieldset');
@@ -2619,9 +2620,21 @@ window.addEventListener('resize', () => {
     comment.maxLength = 1000;
     comment.value = existing?.comment ?? '';
     const button = makeElement('button', 'books-action', existing ? 'Guardar cambios' : 'Añadir a mis libros');
+    button.type = 'submit';
     const error = makeElement('p', 'book-review-error');
     error.setAttribute('role', 'status');
-    form.append(fieldset, commentLabel, comment, button, error);
+    form.append(fieldset, commentLabel, comment);
+    if (allowRemoval) {
+      const actions = makeElement('div', 'books-dialog-actions');
+      const remove = makeElement('button', 'books-secondary book-remove', 'Quitar libro');
+      remove.type = 'button';
+      remove.addEventListener('click', () => removeBook(book, error));
+      actions.append(remove, button);
+      form.append(actions);
+    } else {
+      form.append(button);
+    }
+    form.append(error);
     paintStars();
     form.addEventListener('submit', event => {
       event.preventDefault();
@@ -2728,22 +2741,8 @@ window.addEventListener('resize', () => {
     const review = reviewForm(book, book, saved => {
       details.close();
       focusBook(saved.key);
-    });
+    }, true);
     detailsBody.replaceChildren(summary, review);
-    const original = httpsUrl(book.url);
-    if (original) {
-      const link = makeElement('a', 'book-original-link', 'Abrir en ' + (book.source || original.hostname));
-      link.href = original.href;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      detailsBody.append(link);
-    }
-    const remove = makeElement('button', 'book-remove', 'Quitar de Mis libros');
-    const error = makeElement('p', 'book-review-error');
-    error.setAttribute('role', 'status');
-    remove.type = 'button';
-    remove.addEventListener('click', () => removeBook(book, error));
-    detailsBody.append(remove, error);
     details.showModal();
   }
 
