@@ -26,9 +26,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      - name: Preparar la portada de la agenda
+        run: |
+          cp -R agenda/web _site
+          mv _site/index.html _site/local.html
+          sed 's/Versión de prueba con guardado de notas y eventos por cuenta./Guarda tus notas, eventos y libros en tu cuenta./' agenda/web/prueba-cuentas.html > _site/index.html
+          cat > _site/prueba-cuentas.html <<'HTML'
+          <!doctype html>
+          <html lang="es">
+          <meta charset="utf-8">
+          <title>Agenda</title>
+          <script>location.replace('./' + location.search + location.hash);</script>
+          <a href="./">Abrir la agenda</a>
+          </html>
+          HTML
       - uses: actions/upload-pages-artifact@v4
         with:
-          path: agenda/web
+          path: _site
       - name: Publicar web
         id: deployment
         uses: actions/deploy-pages@v4
