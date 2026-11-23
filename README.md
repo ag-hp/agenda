@@ -1,4 +1,4 @@
-# Agenda 2026 · 2027
+# Agenda
 
 Agenda personal para organizar eventos y tareas, tomar notas y llevar un registro de tus lecturas.
 
