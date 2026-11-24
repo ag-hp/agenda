@@ -473,8 +473,8 @@
     flex:1 1 0; width:auto; min-width:0; min-height:44px; padding:8px 6px;
     line-height:1.2; white-space:normal; overflow-wrap:anywhere;
   }
-  #bookSearchStatus, #bookSyncStatus, .book-review-error { color:#475973; font-size:.9rem; margin:8px 0; }
-  #bookSearchStatus:empty, #bookSyncStatus:empty, .book-review-error:empty { display:none; }
+  #bookSearchStatus, #bookWebStatus, #bookSyncStatus, .book-review-error { color:#475973; font-size:.9rem; margin:8px 0; }
+  #bookSearchStatus:empty, #bookWebStatus:empty, #bookSyncStatus:empty, .book-review-error:empty { display:none; }
   #bookResults { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr)); gap:10px; align-items:start; }
   #bookResults:not(:empty) { margin:14px 0 20px; }
   .book-result { min-width:0; border:1px solid #d8e2f0; border-radius:13px; padding:10px; background:#fff; }
@@ -704,6 +704,7 @@
           <div id="bookCategories" role="group" aria-label="Categorías de la biblioteca"></div>
         </section>
         <p id="bookSearchStatus" role="status"></p>
+        <p id="bookWebStatus" role="status"></p>
         <div id="bookResults" aria-label="Resultados de libros"></div>
         <button class="books-action" id="bookMore" type="button" hidden>Cargar más resultados</button>
       </header>
@@ -2078,16 +2079,16 @@ window.addEventListener('resize', () => {
 
   const navigate = goTo;
   goTo = name => { if (owner || name === 'acceso') navigate(name); };
-  window.searchBooksOnWeb = async (query, signal) => {
+  window.searchBooksOnWeb = async (query, filters, signal) => {
     if (!owner || !client) return [];
     const { data, error } = await client.auth.getSession();
     if (error || !data.session || signal.aborted) return [];
     const response = await fetch(accountUrl + '/functions/v1/books-web-search', {
       method: 'POST', signal,
       headers: { apikey: accountKey, Authorization: 'Bearer ' + data.session.access_token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query })
+      body: JSON.stringify({ query, ...filters })
     });
-    if (!response.ok) return [];
+    if (!response.ok) throw new Error(response.status === 429 ? 'limit' : 'search');
     const result = await response.json();
     return Array.isArray(result.books) ? result.books : [];
   };
@@ -2497,6 +2498,7 @@ window.addEventListener('resize', () => {
   const search = document.getElementById('bookSearch');
   const query = document.getElementById('bookQuery');
   const searchStatus = document.getElementById('bookSearchStatus');
+  const webStatus = document.getElementById('bookWebStatus');
   const results = document.getElementById('bookResults');
   const more = document.getElementById('bookMore');
   const gallery = document.getElementById('bookGallery');
@@ -2596,7 +2598,8 @@ window.addEventListener('resize', () => {
     if (isDetails) title.id = 'bookDetailsTitle';
     const meta = makeElement(isDetails ? 'div' : 'span', 'book-meta');
     meta.append(title, makeElement('small', '', book.author));
-    if (book.source) meta.append(makeElement('small', '', book.source));
+    const edition = [book.preorder && 'Preventa', book.year, book.source].filter(Boolean).join(' · ');
+    if (edition) meta.append(makeElement('small', '', edition));
     return [cover(book), meta];
   }
 
@@ -2794,6 +2797,7 @@ window.addEventListener('resize', () => {
     more.hidden = true;
     results.replaceChildren();
     searchStatus.textContent = '';
+    webStatus.textContent = '';
   }
 
   function resetSearch() {
@@ -2958,33 +2962,46 @@ window.addEventListener('resize', () => {
     return { books, hasNext: Boolean(data.next) };
   }
 
-  async function searchWebIfNeeded(state) {
-    const term = normalizeBookText(state.term);
-    if (state.filtered || state.webStarted || state.match || term.length < 4 || !window.searchBooksOnWeb) return;
+  async function searchWeb(state) {
+    if (state.webStarted || state.term.length < 2 || !window.searchBooksOnWeb) return;
     state.webStarted = true;
     const request = new AbortController();
     state.webRequest = request;
-    const timeout = setTimeout(() => request.abort(), 20000);
+    webStatus.textContent = 'Consultando librerías, editoriales y bibliotecas…';
+    const timeout = setTimeout(() => request.abort(), 45000);
     try {
-      const books = await window.searchBooksOnWeb(state.term, request.signal);
+      const books = await window.searchBooksOnWeb(state.term, state.filters, request.signal);
       if (searchState !== state || request.signal.aborted) return;
-      for (const item of books.slice(0, 4)) {
+      const cards = [];
+      const editions = new Set();
+      for (const item of books.slice(0, 8)) {
         const original = httpsUrl(item.url);
         if (!original || typeof item.title !== 'string' || typeof item.author !== 'string') continue;
         const key = 'web:' + original.href;
-        const signature = normalizeBookText(item.title + ' ' + item.author);
-        if (state.seen.has(key) || state.titles.has(signature)) continue;
+        const isbn = /^97[89]\d{10}$/.test(item.isbn) ? item.isbn : undefined;
+        const edition = isbn || original.href;
+        if (state.seen.has(key) || editions.has(edition)) continue;
         state.seen.add(key);
-        state.titles.add(signature);
+        editions.add(edition);
+        const host = original.hostname.replace(/^www\./, '');
         const book = {
-          key, title: item.title, author: item.author || 'Autor desconocido',
-          source: original.hostname.replace(/^www\./, ''), url: original.href, coverUrl: item.coverUrl
+          key, isbn, title: item.title, author: item.author || 'Autor desconocido',
+          source: host === 'casadellibro.com' ? 'Casa del Libro' : host,
+          year: Number.isInteger(item.year) ? item.year : undefined, preorder: item.preorder === true,
+          url: original.href, coverUrl: item.coverUrl
         };
-        results.append(renderResult(book));
-        searchStatus.textContent = '';
+        cards.push(renderResult(book));
       }
-    } catch {
-      // The catalogue results remain usable if web search is unavailable.
+      results.prepend(...cards);
+      if (cards.length) searchStatus.textContent = '';
+      webStatus.textContent = cards.length || state.seen.size ? '' : 'La búsqueda web no encontró coincidencias verificadas.';
+    } catch (error) {
+      if (searchState === state) {
+        webStatus.textContent = error.message === 'limit'
+          ? 'Has alcanzado el límite diario de búsquedas con IA.'
+          : 'La búsqueda web no respondió. Puedes volver a intentarlo.';
+        if (error.message !== 'limit') state.webStarted = false;
+      }
     } finally {
       clearTimeout(timeout);
       state.webRequest = undefined;
@@ -2996,9 +3013,6 @@ window.addEventListener('resize', () => {
     if (state.seen.has(book.key) || (state.filtered && state.titles.has(signature))) return;
     state.seen.add(book.key);
     state.titles.add(signature);
-    const title = normalizeBookText(book.title);
-    const term = normalizeBookText(state.term);
-    state.match ||= title === term || title.startsWith(term + ' ');
     results.append(renderResult(book));
   }
 
@@ -3035,7 +3049,6 @@ window.addEventListener('resize', () => {
       more.textContent = failures ? 'Reintentar catálogos' : 'Cargar más resultados';
       more.hidden = !hasNext;
       if (hasNext && !failures && !state.filtered) moreObserver?.observe(more);
-      void searchWebIfNeeded(state);
     } finally {
       clearTimeout(timeout);
       state.request = undefined;
@@ -3051,7 +3064,7 @@ window.addEventListener('resize', () => {
     const filtered = Boolean(filters.category || filters.age);
     const providers = filtered ? [searchOpenLibrary] : browsing ? [] : [searchOpenLibrary, searchGutenberg];
     searchState = {
-      term, filters, filtered, seen: new Set(), titles: new Set(), match: false,
+      term, filters, filtered, seen: new Set(), titles: new Set(),
       catalogs: providers.map(search => ({ search, page: 1, done: false }))
     };
     for (const book of searchFeaturedBooks(term, filters, browsing)) addBookResult(book, searchState);
@@ -3073,7 +3086,9 @@ window.addEventListener('resize', () => {
   });
   search.addEventListener('submit', event => {
     event.preventDefault();
-    startSearch(!query.value.trim());
+    const term = query.value.trim();
+    if (!term || searchState?.term !== term) startSearch(!term);
+    if (term && searchState) void searchWeb(searchState);
   });
 
   function applyFilters(next) {
