@@ -512,13 +512,8 @@
   #bookCount { font-size:.9rem; color:#475973; }
   #bookMore { margin:0 0 12px; }
   #bookMore[hidden] { display:none; }
-  .book-removal { display:flex; align-items:center; flex-wrap:wrap; gap:9px; margin:8px 0; color:#334866; font-size:.9rem; }
-  .book-removal[hidden] { display:none; }
-  #undoBookRemove {
-    border:1px solid #bdcde4; background:#fff; padding:7px 11px; border-radius:8px; font:inherit; cursor:pointer;
-    color:#264d89; font-weight:700;
-  }
   .book-remove { color:#9b2335; border-color:#e4b7c0; }
+  .book-confirm-remove { background:#9b2335; }
   #bookAddedStatus { color:#334866; font-size:.9rem; margin:8px 0; }
   #bookAddedStatus:empty { display:none; }
   #bookGallery {
@@ -555,8 +550,10 @@
   .book-gallery-rating { bottom:6px; left:6px; font-size:.8rem; letter-spacing:.025em; }
   .book-gallery-rating .is-rated { color:#ffd279; }
   @media (prefers-reduced-motion:reduce) { .book-gallery-card .book-cover { transition:none; } }
-  #bookDetails { width:min(400px,calc(100% - 24px)); border:1px solid #bdcde4; border-radius:16px; color:#18283f; padding:18px; }
-  #bookDetails::backdrop { background:#17243c70; }
+  #bookDetails, #bookRemoveConfirm { width:min(400px,calc(100% - 24px)); border:1px solid #bdcde4; border-radius:16px; color:#18283f; padding:18px; }
+  #bookDetails::backdrop, #bookRemoveConfirm::backdrop { background:#17243c70; }
+  #bookRemoveConfirm h2 { margin:0; }
+  #bookRemoveMessage { margin:10px 0 18px; overflow-wrap:anywhere; }
   .books-dialog-close { display:flex; justify-content:flex-end; }
   .books-dialog-close button { background:#eff4fb; border:0; border-radius:8px; cursor:pointer; min-width:35px; min-height:35px; }
   @media (max-width:580px) {
@@ -712,14 +709,10 @@
       </header>
       <section aria-labelledby="bookGalleryTitle">
         <div class="book-gallery-heading">
-          <h2 id="bookGalleryTitle">Mis libros</h2>
+          <h2 id="bookGalleryTitle" tabindex="-1">Mis libros</h2>
           <span id="bookCount"></span>
         </div>
         <p id="bookAddedStatus" role="status"></p>
-        <div id="bookRemoval" class="book-removal" hidden>
-          <span id="bookRemovalStatus" role="status"></span>
-          <button id="undoBookRemove" type="button">Deshacer</button>
-        </div>
         <p id="bookSyncStatus" role="status"></p>
         <button class="books-action" id="retryBooksSave" type="button" hidden>Reintentar guardado</button>
         <div id="bookGallery"></div>
@@ -740,6 +733,14 @@
     <dialog id="bookDetails" aria-labelledby="bookDetailsTitle">
       <form method="dialog" class="books-dialog-close"><button type="submit" aria-label="Cerrar ficha">✕</button></form>
       <div id="bookDetailsBody"></div>
+    </dialog>
+    <dialog id="bookRemoveConfirm" aria-labelledby="bookRemoveTitle" aria-describedby="bookRemoveMessage">
+      <h2 id="bookRemoveTitle">¿Estás seguro?</h2>
+      <p id="bookRemoveMessage"></p>
+      <form method="dialog" class="books-dialog-actions">
+        <button class="books-secondary" type="submit" value="cancel" autofocus>Cancelar</button>
+        <button class="books-action book-confirm-remove" type="submit" value="remove">Eliminar definitivamente</button>
+      </form>
     </dialog>
   </section>
 
@@ -2489,10 +2490,9 @@ window.addEventListener('resize', () => {
   const options = document.getElementById('bookOptions');
   const filterForm = document.getElementById('bookFilters');
   const activeFilters = document.getElementById('bookActiveFilters');
-  const removal = document.getElementById('bookRemoval');
-  const removalStatus = document.getElementById('bookRemovalStatus');
-  const undoRemove = document.getElementById('undoBookRemove');
-  let removedBook;
+  const removeConfirm = document.getElementById('bookRemoveConfirm');
+  const removeMessage = document.getElementById('bookRemoveMessage');
+  let pendingRemoval;
   const addedStatus = document.getElementById('bookAddedStatus');
   const search = document.getElementById('bookSearch');
   const query = document.getElementById('bookQuery');
@@ -2500,6 +2500,7 @@ window.addEventListener('resize', () => {
   const results = document.getElementById('bookResults');
   const more = document.getElementById('bookMore');
   const gallery = document.getElementById('bookGallery');
+  const galleryTitle = document.getElementById('bookGalleryTitle');
   const count = document.getElementById('bookCount');
   const syncStatus = document.getElementById('bookSyncStatus');
   const details = document.getElementById('bookDetails');
@@ -2643,7 +2644,11 @@ window.addEventListener('resize', () => {
       const actions = makeElement('div', 'books-dialog-actions');
       const remove = makeElement('button', 'books-secondary book-remove', 'Quitar libro');
       remove.type = 'button';
-      remove.addEventListener('click', () => removeBook(existing, error));
+      remove.addEventListener('click', () => {
+        pendingRemoval = { book: existing, error };
+        removeMessage.textContent = 'Se quitará «' + existing.title + '» de Mis libros y se eliminarán su valoración y su comentario.';
+        removeConfirm.showModal();
+      });
       actions.append(remove, button);
       form.append(actions);
     } else {
@@ -2717,38 +2722,27 @@ window.addEventListener('resize', () => {
   }
 
   function removeBook(book, error) {
-    const index = libraryBooks.findIndex(item => item.key === book.key);
-    if (index < 0) return;
     const next = libraryBooks.filter(item => item.key !== book.key);
+    if (next.length === libraryBooks.length) return;
     if (!saveCollection(next)) {
       error.textContent = 'No se pudo quitar el libro. Inténtalo de nuevo.';
       return;
     }
-    removedBook = { book, index };
-    removal.hidden = false;
-    removalStatus.textContent = book.title + ' se quitó de Mis libros.';
-    addedStatus.textContent = '';
+    addedStatus.textContent = '«' + book.title + '» se quitó de Mis libros.';
     if (details.open) details.close();
     else resetSearch();
-    undoRemove.focus();
+    galleryTitle.focus();
   }
 
-  undoRemove.addEventListener('click', () => {
-    if (!removedBook) return;
-    const { book, index } = removedBook;
-    if (!libraryBooks.some(item => item.key === book.key)) {
-      const next = [...libraryBooks];
-      next.splice(index, 0, book);
-      if (!saveCollection(next)) {
-        removalStatus.textContent = 'No se pudo restaurar el libro. Inténtalo de nuevo.';
-        return;
-      }
+  removeConfirm.addEventListener('cancel', () => { pendingRemoval = undefined; });
+  removeConfirm.querySelector('form').addEventListener('submit', event => {
+    event.preventDefault();
+    const request = pendingRemoval;
+    pendingRemoval = undefined;
+    removeConfirm.close();
+    if (request && event.submitter?.value === 'remove') {
+      removeBook(request.book, request.error);
     }
-    removedBook = undefined;
-    removal.hidden = true;
-    removalStatus.textContent = '';
-    addedStatus.textContent = book.title + ' se restauró.';
-    focusBook(book.key);
   });
 
   function showDetails(book) {
@@ -2813,9 +2807,9 @@ window.addEventListener('resize', () => {
     filters = validatedFilters(preferenceKey ? loadData(preferenceKey, {}) : {});
     showActiveFilters();
     resetSearch();
-    addedStatus.textContent = syncStatus.textContent = removalStatus.textContent = '';
-    removedBook = undefined;
-    removal.hidden = true;
+    addedStatus.textContent = syncStatus.textContent = '';
+    pendingRemoval = undefined;
+    if (removeConfirm.open) removeConfirm.close();
     if (options.open) options.close();
     if (details.open) details.close();
     detailsBody.replaceChildren();
