@@ -57,7 +57,7 @@ const format = {
         items: {
           type: 'object',
           additionalProperties: false,
-          required: ['title', 'author', 'url', 'cover_url', 'isbn', 'year', 'preorder', 'matches_filters'],
+          required: ['title', 'author', 'url', 'cover_url', 'isbn', 'year', 'release_date', 'preorder', 'matches_filters'],
           properties: {
             title: { type: 'string' },
             author: { type: 'string' },
@@ -65,6 +65,7 @@ const format = {
             cover_url: { type: ['string', 'null'] },
             isbn: { type: ['string', 'null'] },
             year: { type: ['integer', 'null'] },
+            release_date: { type: ['string', 'null'] },
             preorder: { type: 'boolean' },
             matches_filters: { type: 'boolean' },
           },
@@ -114,6 +115,7 @@ Deno.serve(async request => {
   if (!reserved) return json({ error: 'limit' }, 429);
 
   try {
+    const today = new Date().toISOString().slice(0, 10);
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + aiKey, 'Content-Type': 'application/json' },
@@ -133,11 +135,11 @@ Deno.serve(async request => {
           'En librerías, consulta Casa del Libro (site:casadellibro.com) y la editorial, buscando preventa, reserva o próxima publicación. En bibliotecas, consulta BNE, WorldCat, Open Library, Europeana, Biblioteca Virtual Miguel de Cervantes o bibliotecas que correspondan al país y al idioma del libro.',
           'Usa también fuentes abiertas pertinentes, incluidas páginas oficiales de historias como Wattpad. Si la consulta contiene un año, editorial, ISBN o preventa, prioriza esa edición o estado.',
           'Devuelve hasta ocho fichas con enlaces exactos de las fuentes consultadas a libros o registros bibliográficos, nunca a listas de búsqueda. Si hay varias ediciones relevantes, incluye antiguas y en preventa cuando existan. Evita repetir la misma edición en distintas tiendas; usa el ISBN para distinguirlas.',
-          'Marca preorder solo cuando la página del ejemplar anuncie explícitamente preventa, reserva antes del lanzamiento o próxima publicación. No confundas una reedición anunciada con la edición antigua. Usa el año y el ISBN de cada edición si constan; los datos desconocidos son null, incluida la portada.',
+          'Marca preorder solo si la página del ejemplar anuncia explícitamente preventa, reserva antes del lanzamiento o próxima publicación y la fecha de lanzamiento todavía no ha pasado. Si consta, devuelve release_date en formato YYYY-MM-DD. No confundas reediciones anunciadas con ediciones antiguas. Usa el año y el ISBN de cada edición si constan; los datos desconocidos son null, incluida la portada.',
           'Si se indicó categoría o edad, devuelve exclusivamente fichas cuyo género o público solicitado consten en una fuente consultada y marca matches_filters como true. Ante duda, omite la ficha.',
           'No inventes datos ni URLs. Devuelve una lista vacía si no puedes verificar ninguna coincidencia.'
         ].join(' '),
-        input: JSON.stringify({ query, category: category ?? null, age: age ?? null }),
+        input: JSON.stringify({ query, category: category ?? null, age: age ?? null, today }),
         text: { format },
       }),
     });
@@ -175,9 +177,12 @@ Deno.serve(async request => {
       ) ? cover : null;
       const year = Number.isInteger(item.year) && item.year >= 1000 && item.year <= new Date().getUTCFullYear() + 5
         ? item.year : null;
+      const releaseDate = typeof item.release_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(item.release_date)
+        ? item.release_date : null;
+      const preorder = item.preorder === true && (releaseDate ? releaseDate >= today : !year || year >= Number(today.slice(0, 4)));
       books.push({
         title: item.title.trim().slice(0, 200), author: item.author.trim().slice(0, 160),
-        url, coverUrl: safeCover, isbn: bookIsbn(item.isbn), year, preorder: item.preorder === true,
+        url, coverUrl: safeCover, isbn: bookIsbn(item.isbn), year, preorder,
       });
     }
     return json({ books });
